@@ -8,6 +8,7 @@ export interface CapturePageRequest {
   readonly viewport: VisualViewport;
   readonly fullPage: boolean;
   readonly timeoutMs: number;
+  readonly settleDelayMs?: number;
 }
 
 export interface CaptureRegionRequest {
@@ -16,6 +17,7 @@ export interface CaptureRegionRequest {
   readonly viewport: VisualViewport;
   readonly region: CaptureRegion;
   readonly timeoutMs: number;
+  readonly settleDelayMs?: number;
 }
 
 export interface VisualCapturePort {

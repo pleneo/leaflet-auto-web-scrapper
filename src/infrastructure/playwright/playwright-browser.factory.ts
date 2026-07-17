@@ -42,6 +42,10 @@ class PlaywrightVisualBrowserPage implements VisualBrowserPage {
     });
   }
 
+  async waitForTimeout(timeoutMs: number): Promise<void> {
+    await this.page.waitForTimeout(timeoutMs);
+  }
+
   async title(): Promise<string> {
     return this.page.title();
   }

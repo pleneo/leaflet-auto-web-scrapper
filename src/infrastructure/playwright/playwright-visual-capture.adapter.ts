@@ -32,7 +32,7 @@ export class PlaywrightVisualCaptureAdapter implements VisualCapturePort {
   }
 
   async capturePage(input: CapturePageRequest): Promise<VisualCaptureResult> {
-    validateCaptureRequest(input.captureId, input.url, input.timeoutMs);
+    validateCaptureRequest(input.captureId, input.url, input.timeoutMs, input.settleDelayMs);
     this.logger.info('Starting visual page capture.', {
       captureId: input.captureId,
       url: input.url,
@@ -44,6 +44,7 @@ export class PlaywrightVisualCaptureAdapter implements VisualCapturePort {
 
     try {
       await page.goto(input.url, input.timeoutMs);
+      await waitForPageSettle(page, input.settleDelayMs);
       const screenshotPng = await page.screenshotPage(input.fullPage);
       const metadata = await this.createMetadata(page, {
         captureId: input.captureId,
@@ -70,7 +71,7 @@ export class PlaywrightVisualCaptureAdapter implements VisualCapturePort {
   }
 
   async captureRegion(input: CaptureRegionRequest): Promise<VisualCaptureResult> {
-    validateCaptureRequest(input.captureId, input.url, input.timeoutMs);
+    validateCaptureRequest(input.captureId, input.url, input.timeoutMs, input.settleDelayMs);
     this.logger.info('Starting visual region capture.', {
       captureId: input.captureId,
       url: input.url,
@@ -82,6 +83,7 @@ export class PlaywrightVisualCaptureAdapter implements VisualCapturePort {
 
     try {
       await page.goto(input.url, input.timeoutMs);
+      await waitForPageSettle(page, input.settleDelayMs);
       const screenshotPng = await page.screenshotRegion(input.region);
       const metadata = await this.createMetadata(page, {
         captureId: input.captureId,
@@ -121,7 +123,23 @@ export class PlaywrightVisualCaptureAdapter implements VisualCapturePort {
   }
 }
 
-function validateCaptureRequest(captureId: string, url: string, timeoutMs: number): void {
+async function waitForPageSettle(
+  page: VisualBrowserPage,
+  settleDelayMs: number | undefined,
+): Promise<void> {
+  if (settleDelayMs === undefined || settleDelayMs === 0) {
+    return;
+  }
+
+  await page.waitForTimeout(settleDelayMs);
+}
+
+function validateCaptureRequest(
+  captureId: string,
+  url: string,
+  timeoutMs: number,
+  settleDelayMs: number | undefined,
+): void {
   if (captureId.trim().length === 0) {
     throw new InvalidVisualCaptureRequestError('captureId cannot be blank.');
   }
@@ -134,6 +152,18 @@ function validateCaptureRequest(captureId: string, url: string, timeoutMs: numbe
 
   if (timeoutMs <= 0) {
     throw new InvalidVisualCaptureRequestError('timeoutMs must be greater than zero.');
+  }
+
+  if (settleDelayMs === undefined) {
+    return;
+  }
+
+  if (!Number.isInteger(settleDelayMs)) {
+    throw new InvalidVisualCaptureRequestError('settleDelayMs must be an integer.');
+  }
+
+  if (settleDelayMs < 0) {
+    throw new InvalidVisualCaptureRequestError('settleDelayMs cannot be negative.');
   }
 }
 

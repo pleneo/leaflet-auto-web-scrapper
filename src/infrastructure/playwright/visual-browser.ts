@@ -7,6 +7,7 @@ export interface OpenVisualBrowserPageRequest {
 
 export interface VisualBrowserPage {
   goto(url: string, timeoutMs: number): Promise<void>;
+  waitForTimeout(timeoutMs: number): Promise<void>;
   title(): Promise<string>;
   currentUrl(): string;
   screenshotPage(fullPage: boolean): Promise<Uint8Array>;
