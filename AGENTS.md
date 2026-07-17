@@ -710,20 +710,28 @@ Forbidden:
 
 Use Conventional Commits:
 
-- `feat:` for new extraction functionality;
-- `fix:` for bug fixes;
-- `refactor:` for internal restructuring without behavior change;
-- `test:` for tests;
-- `docs:` for documentation;
-- `chore:` for tooling and maintenance.
+Every commit must include a non-empty scope that identifies the module being changed:
+
+```text
+type(module): subject
+```
+
+Use concise kebab-case scopes such as `architecture`, `carnauba-extraction`, `leaflet-domain`, `dataset-capture`, `config`, `tests`, or `tooling`.
+
+- `feat(module):` for new extraction functionality;
+- `fix(module):` for bug fixes;
+- `refactor(module):` for internal restructuring without behavior change;
+- `test(module):` for tests;
+- `docs(module):` for documentation;
+- `chore(module):` for tooling and maintenance.
 
 Examples:
 
 ```text
-feat: add visual fsm for carnauba leaflet extraction
-fix: normalize full-page screenshot bounding boxes
-test: cover invalid bounding box mapper cases
-docs: clarify dataset annotation protocol
+feat(carnauba-extraction): add visual fsm for leaflet extraction
+fix(dataset-capture): normalize full-page screenshot bounding boxes
+test(coordinate-mapper): cover invalid bounding box mapper cases
+docs(agents): clarify dataset annotation protocol
 ```
 
 ## 23. Agent Instructions
