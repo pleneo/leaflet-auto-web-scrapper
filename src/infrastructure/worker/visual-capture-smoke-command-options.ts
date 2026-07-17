@@ -8,6 +8,7 @@ export interface VisualCaptureSmokeCommandOptions {
   readonly viewport: VisualViewport;
   readonly fullPage: boolean;
   readonly timeoutMs: number;
+  readonly settleDelayMs: number;
 }
 
 export class InvalidVisualCaptureSmokeCommandOptionsError extends Error {
@@ -36,6 +37,7 @@ export function parseVisualCaptureSmokeCommandOptions(
     }),
     fullPage: readOptionalBoolean(values, 'full-page', true),
     timeoutMs: readOptionalPositiveInteger(values, 'timeout-ms', 30_000),
+    settleDelayMs: readOptionalNonNegativeInteger(values, 'settle-delay-ms', 5_000),
   };
 }
 
@@ -127,6 +129,28 @@ function readOptionalPositiveNumber(
 
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new InvalidVisualCaptureSmokeCommandOptionsError(`--${key} must be a positive number.`);
+  }
+
+  return parsed;
+}
+
+function readOptionalNonNegativeInteger(
+  values: ReadonlyMap<string, string>,
+  key: string,
+  defaultValue: number,
+): number {
+  const value = values.get(key);
+
+  if (value === undefined) {
+    return defaultValue;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new InvalidVisualCaptureSmokeCommandOptionsError(
+      `--${key} must be a non-negative integer.`,
+    );
   }
 
   return parsed;

@@ -28,6 +28,7 @@ describe('PlaywrightVisualCaptureAdapter', () => {
       viewport,
       fullPage: true,
       timeoutMs: 5_000,
+      settleDelayMs: 3_000,
     });
 
     expect(page.gotoCalls).toEqual([
@@ -37,6 +38,7 @@ describe('PlaywrightVisualCaptureAdapter', () => {
       },
     ]);
     expect(page.closed).toBe(true);
+    expect(page.waitForTimeoutCalls).toEqual([3_000]);
     expect(result.screenshotPng).toEqual(Uint8Array.of(1, 2, 3));
     expect(result.metadata).toEqual({
       captureId: 'capture-1',
@@ -165,7 +167,48 @@ describe('PlaywrightVisualCaptureAdapter', () => {
       }),
     ).rejects.toThrow(InvalidVisualCaptureRequestError);
 
+    await expect(
+      adapter.capturePage({
+        captureId: 'capture-7',
+        url: 'https://example.com',
+        viewport,
+        fullPage: true,
+        timeoutMs: 5_000,
+        settleDelayMs: 1.5,
+      }),
+    ).rejects.toThrow(InvalidVisualCaptureRequestError);
+
+    await expect(
+      adapter.capturePage({
+        captureId: 'capture-8',
+        url: 'https://example.com',
+        viewport,
+        fullPage: true,
+        timeoutMs: 5_000,
+        settleDelayMs: -1,
+      }),
+    ).rejects.toThrow(InvalidVisualCaptureRequestError);
+
     expect(factory.openPageCalls).toBe(0);
+  });
+
+  it('skips settle wait when settle delay is zero', async () => {
+    const page = new FakeVisualBrowserPage();
+    const adapter = createAdapter(page);
+
+    await adapter.capturePage({
+      captureId: 'capture-9',
+      url: 'https://example.com',
+      viewport: createVisualViewport({
+        width: 1366,
+        height: 768,
+      }),
+      fullPage: true,
+      timeoutMs: 5_000,
+      settleDelayMs: 0,
+    });
+
+    expect(page.waitForTimeoutCalls).toEqual([]);
   });
 });
 
@@ -203,6 +246,8 @@ interface GotoCall {
 class FakeVisualBrowserPage implements VisualBrowserPage {
   readonly gotoCalls: GotoCall[] = [];
 
+  readonly waitForTimeoutCalls: number[] = [];
+
   readonly pageScreenshots: boolean[] = [];
 
   readonly regionScreenshots: ReturnType<typeof createCaptureRegion>[] = [];
@@ -230,6 +275,11 @@ class FakeVisualBrowserPage implements VisualBrowserPage {
 
   currentUrl(): string {
     return 'https://example.com/final';
+  }
+
+  waitForTimeout(timeoutMs: number): Promise<void> {
+    this.waitForTimeoutCalls.push(timeoutMs);
+    return Promise.resolve();
   }
 
   screenshotPage(fullPage: boolean): Promise<Uint8Array> {

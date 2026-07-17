@@ -40,6 +40,7 @@ const playwrightMocks = vi.hoisted(() => {
   const contextOptions: ContextOptions[] = [];
   const gotoCalls: { readonly url: string; readonly options: GotoOptions }[] = [];
   const screenshotCalls: ScreenshotOptions[] = [];
+  const waitForTimeoutCalls: number[] = [];
   const closeCalls: string[] = [];
 
   return {
@@ -77,6 +78,10 @@ const playwrightMocks = vi.hoisted(() => {
                 },
                 title: () => Promise.resolve('Leaflet page'),
                 url: () => 'https://example.com/final',
+                waitForTimeout: (timeoutMs: number) => {
+                  waitForTimeoutCalls.push(timeoutMs);
+                  return Promise.resolve();
+                },
               }),
           });
         },
@@ -84,6 +89,7 @@ const playwrightMocks = vi.hoisted(() => {
     }),
     launchOptions,
     screenshotCalls,
+    waitForTimeoutCalls,
   };
 });
 
@@ -100,6 +106,7 @@ describe('PlaywrightBrowserFactory', () => {
     playwrightMocks.contextOptions.length = 0;
     playwrightMocks.gotoCalls.length = 0;
     playwrightMocks.screenshotCalls.length = 0;
+    playwrightMocks.waitForTimeoutCalls.length = 0;
     playwrightMocks.closeCalls.length = 0;
   });
 
@@ -140,6 +147,7 @@ describe('PlaywrightBrowserFactory', () => {
     });
 
     await page.goto('https://example.com', 5_000);
+    await page.waitForTimeout(3_000);
     const pageScreenshot = await page.screenshotPage(true);
     const regionScreenshot = await page.screenshotRegion(
       createCaptureRegion({
@@ -177,6 +185,7 @@ describe('PlaywrightBrowserFactory', () => {
         type: 'png',
       },
     ]);
+    expect(playwrightMocks.waitForTimeoutCalls).toEqual([3_000]);
     expect(pageScreenshot).toEqual(Uint8Array.of(1, 2, 3));
     expect(regionScreenshot).toEqual(Uint8Array.of(1, 2, 3));
     expect(title).toBe('Leaflet page');

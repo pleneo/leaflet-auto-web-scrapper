@@ -19,6 +19,7 @@ describe('parseVisualCaptureSmokeCommandOptions', () => {
       },
       fullPage: true,
       timeoutMs: 30_000,
+      settleDelayMs: 5_000,
     });
   });
 
@@ -40,6 +41,8 @@ describe('parseVisualCaptureSmokeCommandOptions', () => {
       'false',
       '--timeout-ms',
       '5000',
+      '--settle-delay-ms',
+      '7000',
     ]);
 
     expect(options).toEqual({
@@ -53,6 +56,7 @@ describe('parseVisualCaptureSmokeCommandOptions', () => {
       },
       fullPage: false,
       timeoutMs: 5_000,
+      settleDelayMs: 7_000,
     });
   });
 
@@ -112,6 +116,15 @@ describe('parseVisualCaptureSmokeCommandOptions', () => {
 
     expect(() =>
       parseVisualCaptureSmokeCommandOptions(['--url', 'https://example.com', '--height', '1.5']),
+    ).toThrow(InvalidVisualCaptureSmokeCommandOptionsError);
+
+    expect(() =>
+      parseVisualCaptureSmokeCommandOptions([
+        '--url',
+        'https://example.com',
+        '--settle-delay-ms',
+        '-1',
+      ]),
     ).toThrow(InvalidVisualCaptureSmokeCommandOptionsError);
 
     expect(() =>

@@ -34,6 +34,7 @@ async function run(): Promise<void> {
     viewport: options.viewport,
     fullPage: options.fullPage,
     timeoutMs: options.timeoutMs,
+    settleDelayMs: options.settleDelayMs,
   });
 
   const artifact = await storage.storeVisualCapture({
