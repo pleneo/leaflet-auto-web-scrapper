@@ -1,0 +1,131 @@
+import type { Clock } from '../../../application/ports/clock';
+import type { Logger } from '../../../application/ports/logger';
+import type {
+  ExtractedLeaflet,
+  ExtractedLeafletImage,
+  LeafletExtractionResult,
+} from '../../../domain/leaflet/extracted-leaflet';
+import type { VisualViewport } from '../../../domain/visual/viewport';
+import type { CarnaubaLeafletCard, CarnaubaLeafletPageFactory } from './carnauba-leaflet-page';
+import { createLeafletId } from './leaflet-id';
+
+export interface ExtractCarnaubaLeafletsInput {
+  readonly sourceUrl: string;
+  readonly viewport: VisualViewport;
+  readonly timeoutMs: number;
+  readonly settleDelayMs: number;
+}
+
+export class CarnaubaLeafletExtractionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CarnaubaLeafletExtractionError';
+  }
+}
+
+export class CarnaubaLeafletExtractor {
+  private readonly pageFactory: CarnaubaLeafletPageFactory;
+
+  private readonly clock: Clock;
+
+  private readonly logger: Logger;
+
+  constructor(pageFactory: CarnaubaLeafletPageFactory, clock: Clock, logger: Logger) {
+    this.pageFactory = pageFactory;
+    this.clock = clock;
+    this.logger = logger;
+  }
+
+  async extract(input: ExtractCarnaubaLeafletsInput): Promise<LeafletExtractionResult> {
+    validateInput(input);
+
+    const page = await this.pageFactory.openPage({
+      viewport: input.viewport,
+      timeoutMs: input.timeoutMs,
+    });
+
+    try {
+      await page.goto(input.sourceUrl);
+      await page.waitForTimeout(input.settleDelayMs);
+
+      const cards = await page.discoverCards();
+      this.logger.info('Discovered Carnauba leaflet cards.', {
+        count: cards.length,
+      });
+
+      const leaflets: ExtractedLeaflet[] = [];
+
+      for (const [cardIndex, card] of cards.entries()) {
+        const openedLeaflet = await page.openLeafletAt(cardIndex);
+        const imageUrls = deduplicateImageUrls(openedLeaflet.imageUrls);
+
+        if (imageUrls.length === 0) {
+          throw new CarnaubaLeafletExtractionError(
+            `Leaflet card ${String(cardIndex)} did not expose any modal image URL.`,
+          );
+        }
+
+        leaflets.push(createExtractedLeaflet(card, openedLeaflet.title, cardIndex, imageUrls));
+        await page.closeLeafletModal();
+      }
+
+      return {
+        supermarketId: 'carnauba',
+        sourceUrl: input.sourceUrl,
+        extractedAtIso: this.clock.nowIso(),
+        leaflets,
+      };
+    } finally {
+      await page.close();
+    }
+  }
+}
+
+function validateInput(input: ExtractCarnaubaLeafletsInput): void {
+  validateUrl(input.sourceUrl);
+  validatePositiveInteger(input.timeoutMs, 'timeoutMs');
+
+  if (!Number.isInteger(input.settleDelayMs) || input.settleDelayMs < 0) {
+    throw new CarnaubaLeafletExtractionError('settleDelayMs must be a non-negative integer.');
+  }
+}
+
+function validateUrl(url: string): void {
+  try {
+    new URL(url);
+  } catch {
+    throw new CarnaubaLeafletExtractionError('sourceUrl must be absolute and valid.');
+  }
+}
+
+function validatePositiveInteger(value: number, fieldName: string): void {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new CarnaubaLeafletExtractionError(`${fieldName} must be a positive integer.`);
+  }
+}
+
+function createExtractedLeaflet(
+  card: CarnaubaLeafletCard,
+  openedTitle: string,
+  cardIndex: number,
+  imageUrls: readonly string[],
+): ExtractedLeaflet {
+  const title = openedTitle.trim().length > 0 ? openedTitle.trim() : card.title;
+
+  return {
+    leafletId: createLeafletId(title, cardIndex),
+    title,
+    cardIndex,
+    coverImageUrl: card.coverImageUrl,
+    images: imageUrls.map((imageUrl, index): ExtractedLeafletImage => {
+      return {
+        order: index + 1,
+        imageUrl,
+      };
+    }),
+  };
+}
+
+function deduplicateImageUrls(imageUrls: readonly string[]): readonly string[] {
+  return [...new Set(imageUrls.map((imageUrl) => imageUrl.trim()).filter(Boolean))];
+}
