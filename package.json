@@ -21,6 +21,7 @@
     "test:coverage": "vitest run --coverage",
     "capture:smoke": "tsx src/infrastructure/worker/visual-capture-smoke-command.ts",
     "carnauba:leaflets:smoke": "tsx src/infrastructure/worker/carnauba-leaflets-smoke-command.ts",
+    "carnauba:api:extract": "tsx src/infrastructure/worker/carnauba-api-extract-command.ts",
     "commitlint": "commitlint --from=HEAD~1 --to=HEAD --verbose",
     "preview": "vite preview",
     "verify": "npm run typecheck && npm run typecheck:test && npm run lint && npm run format:check && npm run test:coverage && npm run build"

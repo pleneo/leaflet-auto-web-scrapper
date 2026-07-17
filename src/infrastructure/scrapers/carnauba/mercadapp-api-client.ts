@@ -26,6 +26,11 @@ interface MercadappFlipbooksResponse {
 export interface MercadappCarnaubaApiClientConfig {
   readonly baseUrl: string;
   readonly brandId: number;
+  readonly authTokenProvider?: MercadappAuthTokenProvider;
+}
+
+export interface MercadappAuthTokenProvider {
+  getAuthorizationHeader(): Promise<string>;
 }
 
 export class MercadappCarnaubaApiClient
@@ -35,9 +40,12 @@ export class MercadappCarnaubaApiClient
 
   private readonly brandId: number;
 
+  private readonly authTokenProvider: MercadappAuthTokenProvider | undefined;
+
   constructor(config: MercadappCarnaubaApiClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, '');
     this.brandId = config.brandId;
+    this.authTokenProvider = config.authTokenProvider;
   }
 
   async listStores(): Promise<readonly CarnaubaStore[]> {
@@ -94,6 +102,7 @@ export class MercadappCarnaubaApiClient
     const response = await fetch(`${this.baseUrl}${path}`, {
       headers: {
         Accept: 'application/json',
+        ...(await this.getAuthorizationHeaders()),
         Origin: 'https://carnaubasupermercados.com.br',
         Referer: 'https://carnaubasupermercados.com.br/',
       },
@@ -116,5 +125,15 @@ export class MercadappCarnaubaApiClient
     }
 
     throw new Error('Mercadapp response must be a JSON object or array.');
+  }
+
+  private async getAuthorizationHeaders(): Promise<Readonly<Record<string, string>>> {
+    if (this.authTokenProvider === undefined) {
+      return {};
+    }
+
+    return {
+      Authorization: await this.authTokenProvider.getAuthorizationHeader(),
+    };
   }
 }
