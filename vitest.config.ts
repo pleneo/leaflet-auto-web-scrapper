@@ -1,0 +1,50 @@
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    coverage: {
+      exclude: [
+        'coverage/**',
+        'dist/**',
+        'dist-ssr/**',
+        'node_modules/**',
+        'src/application/ports/**',
+        'src/**/*.d.ts',
+        'src/App.tsx',
+        'src/domain/dataset/academic-dataset-sample.ts',
+        'src/domain/dataset/dataset-split.ts',
+        'src/domain/dataset/screenshot-metadata.ts',
+        'src/domain/dataset/target-semantic-label.ts',
+        'src/domain/extraction/extraction-run-status.ts',
+        'src/domain/extraction/extraction-run.ts',
+        'src/domain/extraction/fsm-state-name.ts',
+        'src/domain/leaflet/**',
+        'src/domain/supermarket/**',
+        'src/main.tsx',
+        'src/worker-main.ts',
+      ],
+      include: ['src/**/*.{ts,tsx}'],
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      thresholds: {
+        branches: 100,
+        functions: 100,
+        lines: 100,
+        statements: 100,
+      },
+    },
+    environment: 'node',
+    globals: true,
+    include: [
+      'src/**/*.test.ts',
+      'src/**/*.test.tsx',
+      'src/**/*.spec.ts',
+      'src/**/*.spec.tsx',
+      'tests/**/*.test.ts',
+      'tests/**/*.test.tsx',
+      'tests/**/*.spec.ts',
+      'tests/**/*.spec.tsx',
+    ],
+    passWithNoTests: false,
+  },
+});

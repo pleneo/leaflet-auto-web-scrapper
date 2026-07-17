@@ -1,0 +1,7 @@
+coverage
+dist
+dist-ssr
+node_modules
+.data
+.idea
+package-lock.json

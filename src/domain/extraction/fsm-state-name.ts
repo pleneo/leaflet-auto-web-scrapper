@@ -1,0 +1,8 @@
+export type FsmStateName =
+  | 'ANCHOR_PAGE'
+  | 'STORE_SELECTION'
+  | 'LEAFLETS_PAGE'
+  | 'LEAFLET_MODAL'
+  | 'PDF_DOWNLOAD'
+  | 'IMAGE_GALLERY'
+  | 'ERROR_RECOVERY';
