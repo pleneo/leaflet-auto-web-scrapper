@@ -734,7 +734,15 @@ test(coordinate-mapper): cover invalid bounding box mapper cases
 docs(agents): clarify dataset annotation protocol
 ```
 
-## 23. Agent Instructions
+## 23. Branch And Pull Request Workflow
+
+Feature development must use stacked pull requests through `gh stack`.
+
+Do not work directly on `main` for feature work. Break macro features into small stacked branches that can be reviewed from bottom to top. Prefer branches with one clear purpose and roughly 300 changed lines or fewer.
+
+Before creating or updating a stack, read [docs/gh-stack-workflow.md](docs/gh-stack-workflow.md).
+
+## 24. Agent Instructions
 
 When an AI coding agent works in this repository, it must follow these rules:
 
@@ -751,10 +759,11 @@ When an AI coding agent works in this repository, it must follow these rules:
 11. Do not introduce loose types.
 12. Do not replace the research architecture with a one-off automation script.
 13. Keep 24/7 scheduling, retries, queues, and shutdown behavior outside supermarket strategies.
+14. Use the documented `gh stack` workflow for feature branches and PRs.
 
 If a user request conflicts with these rules, explain the conflict and propose the smallest alternative that preserves the project's research and production value.
 
-## 24. Strategic Standard
+## 25. Strategic Standard
 
 The project should be engineered as if it may become both:
 
@@ -769,7 +778,7 @@ The central standard is simple:
 Every successful navigation step should teach the future model what a human-relevant target looked like, where it was, and what action it represented.
 ```
 
-## 25. Running The Project
+## 26. Running The Project
 
 This project must run on Node 24. Node version selection should be handled through `nvm`.
 
@@ -816,7 +825,7 @@ The meaning of each command must remain clear:
 
 No feature should be committed if `npm run verify` fails. If build, lint, formatting, or tests fail, fix the failure before committing.
 
-## 26. Test Coverage
+## 27. Test Coverage
 
 Vitest is the official test runner for this project. Test configuration, scripts, examples, and documentation must treat Vitest as the standard testing tool.
 
