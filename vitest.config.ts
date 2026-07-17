@@ -23,6 +23,7 @@ export default defineConfig({
         'src/domain/visual/capture-artifact.ts',
         'src/domain/visual/capture-result.ts',
         'src/infrastructure/playwright/visual-browser.ts',
+        'src/infrastructure/worker/visual-capture-smoke-command.ts',
         'src/main.tsx',
         'src/worker-main.ts',
       ],
