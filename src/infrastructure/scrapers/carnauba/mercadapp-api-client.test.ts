@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MercadappCarnaubaApiClient } from './mercadapp-api-client';
+import {
+  MercadappCarnaubaApiClient,
+  type MercadappAuthTokenProvider,
+} from './mercadapp-api-client';
 
 describe('MercadappCarnaubaApiClient', () => {
   afterEach(() => {
@@ -59,6 +62,35 @@ describe('MercadappCarnaubaApiClient', () => {
         corporateName: '',
       },
     ]);
+  });
+
+  it('uses authorization headers when an auth token provider is configured', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify([]), {
+          status: 200,
+        }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await new MercadappCarnaubaApiClient({
+      baseUrl: 'https://merconnect.mercadapp.com.br/mapp/v2',
+      brandId: 27,
+      authTokenProvider: new FixedAuthTokenProvider(),
+    }).listStores();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://merconnect.mercadapp.com.br/mapp/v2/markets?brand_id=27',
+      {
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer test-token',
+          Origin: 'https://carnaubasupermercados.com.br',
+          Referer: 'https://carnaubasupermercados.com.br/',
+        },
+      },
+    );
   });
 
   it('lists flipbooks for a store', async () => {
@@ -165,4 +197,10 @@ function createClient(): MercadappCarnaubaApiClient {
     baseUrl: 'https://merconnect.mercadapp.com.br/mapp/v2/',
     brandId: 27,
   });
+}
+
+class FixedAuthTokenProvider implements MercadappAuthTokenProvider {
+  getAuthorizationHeader(): Promise<string> {
+    return Promise.resolve('Bearer test-token');
+  }
 }
