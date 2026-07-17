@@ -740,6 +740,8 @@ Feature development must use stacked pull requests through `gh stack`.
 
 Do not work directly on `main` for feature work. Break macro features into small stacked branches that can be reviewed from bottom to top. Prefer branches with one clear purpose and roughly 300 changed lines or fewer.
 
+PR titles and descriptions must be written in English and follow the standard documented in the stack workflow guide.
+
 Before creating or updating a stack, read [docs/gh-stack-workflow.md](docs/gh-stack-workflow.md).
 
 ## 24. Agent Instructions
@@ -821,7 +823,7 @@ The meaning of each command must remain clear:
 - `npm run format:check`: verifies Prettier formatting, including mandatory semicolons.
 - `npm run test`: runs the automated test suite.
 - `npm run test:coverage`: runs the test suite with coverage reporting.
-- `npm run verify`: runs the complete quality gate expected before commits.
+- `npm run verify`: runs the complete quality gate expected before commits, including build.
 
 No feature should be committed if `npm run verify` fails. If build, lint, formatting, or tests fail, fix the failure before committing.
 
@@ -905,13 +907,8 @@ Tests must follow the same TypeScript rules as production code. Do not use `any`
 
 Real public supermarket websites must not be required for the default test suite. Default tests must be deterministic. If a test needs a real browser or a real website, it must be explicitly separated, documented, and safe to skip in unstable environments.
 
-Before committing, these commands must pass:
+Before committing, the complete quality gate must pass:
 
 ```bash
-npm run build
-npm run lint
-npm run format:check
-npm run test
-npm run test:coverage
 npm run verify
 ```

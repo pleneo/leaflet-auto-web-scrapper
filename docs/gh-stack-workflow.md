@@ -121,7 +121,8 @@ It checks:
 - test typecheck;
 - ESLint;
 - Prettier formatting;
-- Vitest coverage.
+- Vitest coverage;
+- production build.
 
 ## Starting A New Stack
 
@@ -358,6 +359,75 @@ PR 3: depends on PR 2
 ```
 
 Reviewers should not need to understand the whole macro feature to approve the first PR. The first PR should be valuable and correct on its own.
+
+## PR Title And Description Standard
+
+All pull requests must be written in English.
+
+PR titles must follow this format:
+
+```text
+Type(subject): Branch-Message
+```
+
+Where:
+
+- `Type` is the conventional change type with the first letter capitalized;
+- `subject` is the scoped module, using kebab-case;
+- `Branch-Message` is a short human-readable summary derived from the branch purpose.
+
+Examples:
+
+```text
+Feat(visual-capture): Add visual capture contracts
+Feat(coordinate-mapper): Add playwright coordinate mapper
+Fix(dataset-capture): Normalize document-relative bounding boxes
+Docs(gh-stack): Document stacked pull request workflow
+```
+
+PR descriptions must use exactly this structure:
+
+```md
+## Summary
+
+Text explaining the purpose of the PR.
+
+## What Changed
+
+Text explaining the concrete changes made in this PR.
+
+## Testing
+
+- [x] npm run verify
+- [x] Manual validation not required
+
+## Conclusion
+
+Text explaining the final result, validation status, and any relevant next step.
+```
+
+Do not omit sections. The `Testing` section is mandatory for every PR. If a PR does not require manual validation, state that explicitly.
+
+Example:
+
+```md
+## Summary
+
+Adds the application-level contracts required for visual state capture without introducing Playwright dependencies outside infrastructure.
+
+## What Changed
+
+Created the visual capture and artifact storage ports, defined typed input/output contracts, and added tests for the new mapper behavior.
+
+## Testing
+
+- [x] npm run verify
+- [x] Manual validation not required
+
+## Conclusion
+
+The project now has the application boundary needed for future Playwright capture adapters. Validation passes with `npm run verify`.
+```
 
 ## Merge Rule
 
