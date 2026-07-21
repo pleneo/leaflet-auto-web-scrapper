@@ -11,7 +11,7 @@ export default defineConfig({
         'src/application/ports/**',
         'src/**/*.d.ts',
         'src/App.tsx',
-        'src/domain/dataset/academic-dataset-sample.ts',
+        'src/domain/dataset/visual-dataset-sample.ts',
         'src/domain/dataset/dataset-split.ts',
         'src/domain/dataset/screenshot-metadata.ts',
         'src/domain/dataset/target-semantic-label.ts',

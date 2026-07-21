@@ -1,4 +1,4 @@
-import type { AcademicDatasetSample } from '../../domain/dataset/academic-dataset-sample';
+import type { VisualDatasetSample } from '../../domain/dataset/visual-dataset-sample';
 import type { LeafletMetadata } from '../../domain/leaflet/leaflet-metadata';
 import type { PromotionLeaflet } from '../../domain/leaflet/promotion-leaflet';
 import type { SupermarketId } from '../../domain/supermarket/supermarket-id';
@@ -12,7 +12,7 @@ export interface StrategyExecutionContext {
 
 export interface StrategyExtractionOutput<TMetadata extends LeafletMetadata = LeafletMetadata> {
   readonly leaflet: PromotionLeaflet<TMetadata>;
-  readonly datasetSamples: readonly AcademicDatasetSample[];
+  readonly datasetSamples: readonly VisualDatasetSample[];
 }
 
 export interface SupermarketStrategy<TMetadata extends LeafletMetadata = LeafletMetadata> {

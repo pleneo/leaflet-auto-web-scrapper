@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AcademicDatasetSample } from '../../domain/dataset/academic-dataset-sample';
+import type { VisualDatasetSample } from '../../domain/dataset/visual-dataset-sample';
 import { createPixelBoundingBox, normalizeBoundingBox } from '../../domain/dataset/bounding-box';
 import type { ExtractionRunSummary } from '../../domain/extraction/extraction-run';
 import type { PromotionLeaflet } from '../../domain/leaflet/promotion-leaflet';
@@ -18,7 +18,7 @@ import { StrategyRegistry } from '../services/strategy-registry';
 import { ExtractSupermarketLeafletUseCase } from './extract-supermarket-leaflet.use-case';
 
 describe('ExtractSupermarketLeafletUseCase', () => {
-  it('runs one extraction attempt and persists business and academic outputs', async () => {
+  it('runs one extraction attempt and persists business and visual dataset outputs', async () => {
     const output = createStrategyOutput();
     const strategy = new FakeStrategy('carnauba', Promise.resolve(output));
     const dependencies = createDependencies([strategy]);
@@ -152,9 +152,9 @@ class InMemoryLeafletRepository implements LeafletRepository {
 }
 
 class InMemoryDatasetSampleRepository implements DatasetSampleRepository {
-  readonly savedBatches: AcademicDatasetSample[][] = [];
+  readonly savedBatches: VisualDatasetSample[][] = [];
 
-  saveMany(samples: readonly AcademicDatasetSample[]): Promise<void> {
+  saveMany(samples: readonly VisualDatasetSample[]): Promise<void> {
     this.savedBatches.push([...samples]);
     return Promise.resolve();
   }
