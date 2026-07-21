@@ -23,6 +23,7 @@ export default defineConfig({
         'src/domain/visual/capture-artifact.ts',
         'src/domain/visual/capture-result.ts',
         'src/infrastructure/playwright/visual-browser.ts',
+        'src/infrastructure/playwright/playwright-visual-dataset-page.ts',
         'src/infrastructure/scrapers/carnauba/carnauba-api-types.ts',
         'src/infrastructure/scrapers/carnauba/carnauba-leaflet-page.ts',
         'src/infrastructure/scrapers/carnauba/playwright-carnauba-leaflet-page.factory.ts',
