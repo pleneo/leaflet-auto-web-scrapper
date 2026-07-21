@@ -114,6 +114,7 @@ export class CarnaubaLeafletExtractor {
         }
 
         leaflets.push(createExtractedLeaflet(card, title, cardIndex, imageUrls));
+        await this.captureModalCloseVisualDatasetSampleIfEnabled(page, input, cardIndex, title);
         await page.closeLeafletModal();
       }
 
@@ -234,6 +235,42 @@ export class CarnaubaLeafletExtractor {
       target: visualTarget.target,
     });
   }
+
+  private async captureModalCloseVisualDatasetSampleIfEnabled(
+    page: Awaited<ReturnType<CarnaubaLeafletPageFactory['openPage']>>,
+    input: ExtractCarnaubaLeafletsInput,
+    cardIndex: number,
+    leafletTitle: string,
+  ): Promise<void> {
+    if (input.visualDataset === undefined || this.visualDatasetCaptureService === undefined) {
+      return;
+    }
+
+    const visualTarget = await page.getLeafletModalCloseVisualTarget();
+
+    await this.visualDatasetCaptureService.captureBeforeAction({
+      sampleId: createModalCloseVisualDatasetSampleId(
+        input.visualDataset.runId,
+        input.visualDataset.storeId,
+        leafletTitle,
+        cardIndex,
+      ),
+      runId: input.visualDataset.runId,
+      supermarketId: 'carnauba',
+      stateName: 'LEAFLET_MODAL',
+      label: 'close_modal_button',
+      subject: {
+        subjectKind: 'carnauba-leaflet-modal-close',
+        storeId: input.visualDataset.storeId,
+        storeName: input.visualDataset.storeName,
+        cardIndex,
+        leafletTitle,
+      },
+      split: input.visualDataset.split,
+      page: visualTarget.page,
+      target: visualTarget.target,
+    });
+  }
 }
 
 function validateInput(input: ExtractCarnaubaLeafletsInput): void {
@@ -317,4 +354,13 @@ function createModalImageVisualDatasetSampleId(
     title,
     cardIndex,
   )}-image-${String(imageIndex + 1)}`;
+}
+
+function createModalCloseVisualDatasetSampleId(
+  runId: string,
+  storeId: number,
+  title: string,
+  cardIndex: number,
+): string {
+  return `${runId}-store-${String(storeId)}-card-${createLeafletId(title, cardIndex)}-close-modal`;
 }
