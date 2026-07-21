@@ -24,7 +24,7 @@ export function parseCarnaubaLeafletsSmokeCommandOptions(
     url: validateAbsoluteUrl(
       readOptionalString(values, 'url', 'https://carnaubasupermercados.com.br/loja/79/encartes'),
     ),
-    outputRootDirectory: readOptionalString(values, 'output-root', '.data/leaflets'),
+    outputRootDirectory: readOptionalString(values, 'output-root', '.data/leaflets-smoke'),
     viewport: createVisualViewport({
       width: readOptionalPositiveInteger(values, 'width', 1366),
       height: readOptionalPositiveInteger(values, 'height', 768),

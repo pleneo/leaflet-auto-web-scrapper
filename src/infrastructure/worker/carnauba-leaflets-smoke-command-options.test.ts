@@ -8,7 +8,7 @@ describe('parseCarnaubaLeafletsSmokeCommandOptions', () => {
   it('parses defaults', () => {
     expect(parseCarnaubaLeafletsSmokeCommandOptions([])).toEqual({
       url: 'https://carnaubasupermercados.com.br/loja/79/encartes',
-      outputRootDirectory: '.data/leaflets',
+      outputRootDirectory: '.data/leaflets-smoke',
       viewport: {
         width: 1366,
         height: 768,
