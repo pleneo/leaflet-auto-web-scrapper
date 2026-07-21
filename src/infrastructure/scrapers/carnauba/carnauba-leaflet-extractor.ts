@@ -15,6 +15,7 @@ import type { CarnaubaLeafletCard, CarnaubaLeafletPageFactory } from './carnauba
 import { createLeafletId } from './leaflet-id';
 
 export interface ExtractCarnaubaLeafletsInput {
+  readonly homeUrl: string;
   readonly sourceUrl: string;
   readonly viewport: VisualViewport;
   readonly timeoutMs: number;
@@ -72,7 +73,10 @@ export class CarnaubaLeafletExtractor {
     });
 
     try {
-      await page.goto(input.sourceUrl);
+      await page.goto(input.homeUrl);
+      await page.waitForTimeout(input.settleDelayMs);
+      await this.captureHomeVisualDatasetSampleIfEnabled(page, input);
+      await page.openLeafletsPage(input.sourceUrl);
       await page.waitForTimeout(input.settleDelayMs);
 
       const cards = await page.discoverCards();
@@ -106,6 +110,36 @@ export class CarnaubaLeafletExtractor {
     } finally {
       await page.close();
     }
+  }
+
+  private async captureHomeVisualDatasetSampleIfEnabled(
+    page: Awaited<ReturnType<CarnaubaLeafletPageFactory['openPage']>>,
+    input: ExtractCarnaubaLeafletsInput,
+  ): Promise<void> {
+    if (input.visualDataset === undefined || this.visualDatasetCaptureService === undefined) {
+      return;
+    }
+
+    const visualTarget = await page.getLeafletsPageVisualTarget();
+
+    await this.visualDatasetCaptureService.captureBeforeAction({
+      sampleId: createHomeVisualDatasetSampleId(
+        input.visualDataset.runId,
+        input.visualDataset.storeId,
+      ),
+      runId: input.visualDataset.runId,
+      supermarketId: 'carnauba',
+      stateName: 'ANCHOR_PAGE',
+      label: 'open_leaflets_page_button',
+      subject: {
+        subjectKind: 'carnauba-home-leaflets-link',
+        storeId: input.visualDataset.storeId,
+        storeName: input.visualDataset.storeName,
+      },
+      split: input.visualDataset.split,
+      page: visualTarget.page,
+      target: visualTarget.target,
+    });
   }
 
   private async captureVisualDatasetSampleIfEnabled(
@@ -146,6 +180,7 @@ export class CarnaubaLeafletExtractor {
 }
 
 function validateInput(input: ExtractCarnaubaLeafletsInput): void {
+  validateUrl(input.homeUrl);
   validateUrl(input.sourceUrl);
   validatePositiveInteger(input.timeoutMs, 'timeoutMs');
 
@@ -201,4 +236,8 @@ function createVisualDatasetSampleId(
   cardIndex: number,
 ): string {
   return `${runId}-store-${String(storeId)}-card-${createLeafletId(title, cardIndex)}`;
+}
+
+function createHomeVisualDatasetSampleId(runId: string, storeId: number): string {
+  return `${runId}-store-${String(storeId)}-open-leaflets-page`;
 }

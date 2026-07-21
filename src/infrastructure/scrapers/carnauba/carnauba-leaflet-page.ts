@@ -27,6 +27,8 @@ export interface CarnaubaLeafletVisualTarget {
 export interface CarnaubaLeafletPage {
   goto(url: string): Promise<void>;
   waitForTimeout(timeoutMs: number): Promise<void>;
+  getLeafletsPageVisualTarget(): Promise<CarnaubaLeafletVisualTarget>;
+  openLeafletsPage(expectedUrl: string): Promise<void>;
   discoverCards(): Promise<readonly CarnaubaLeafletCard[]>;
   getLeafletCardVisualTarget(cardIndex: number): Promise<CarnaubaLeafletVisualTarget>;
   openLeafletAt(cardIndex: number): Promise<OpenedCarnaubaLeaflet>;

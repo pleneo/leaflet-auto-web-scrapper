@@ -4,6 +4,7 @@ import type { Logger } from '../../../application/ports/logger';
 import { createVisualViewport } from '../../../domain/visual/viewport';
 import type { CarnaubaStore, CarnaubaStoreCatalogProvider } from './carnauba-api-types';
 import {
+  buildStoreHomeUrl,
   buildStoreLeafletsUrl,
   CarnaubaPlaywrightExtractionError,
   CarnaubaPlaywrightExtractionService,
@@ -37,6 +38,10 @@ describe('CarnaubaPlaywrightExtractionService', () => {
     expect(leafletExtractor.sourceUrls).toEqual([
       'https://carnaubasupermercados.com.br/loja/79/encartes',
       'https://carnaubasupermercados.com.br/loja/70/encartes',
+    ]);
+    expect(leafletExtractor.homeUrls).toEqual([
+      'https://carnaubasupermercados.com.br/loja/79',
+      'https://carnaubasupermercados.com.br/loja/70',
     ]);
     expect(result).toMatchObject({
       brandId: 27,
@@ -134,6 +139,9 @@ describe('CarnaubaPlaywrightExtractionService', () => {
       }),
     ).rejects.toThrow(CarnaubaPlaywrightExtractionError);
     expect(() => buildStoreLeafletsUrl('https://carnaubasupermercados.com.br', 0)).toThrow(
+      CarnaubaPlaywrightExtractionError,
+    );
+    expect(() => buildStoreHomeUrl('https://carnaubasupermercados.com.br', 0)).toThrow(
       CarnaubaPlaywrightExtractionError,
     );
   });
@@ -281,6 +289,8 @@ class FailingStoreCatalogProvider implements CarnaubaStoreCatalogProvider {
 }
 
 class FakeSingleStoreExtractor implements SingleStoreCarnaubaLeafletExtractor {
+  readonly homeUrls: string[] = [];
+
   readonly sourceUrls: string[] = [];
 
   readonly receivedInputs: Parameters<SingleStoreCarnaubaLeafletExtractor['extract']>[0][] = [];
@@ -297,6 +307,7 @@ class FakeSingleStoreExtractor implements SingleStoreCarnaubaLeafletExtractor {
     ];
   }> {
     this.receivedInputs.push(input);
+    this.homeUrls.push(input.homeUrl);
     this.sourceUrls.push(input.sourceUrl);
     const storeId = input.sourceUrl.includes('/79/') ? '79' : '70';
 
