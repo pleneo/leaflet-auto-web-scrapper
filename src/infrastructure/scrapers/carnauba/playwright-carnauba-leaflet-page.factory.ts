@@ -141,6 +141,17 @@ class PlaywrightCarnaubaLeafletPage implements CarnaubaLeafletPage {
     };
   }
 
+  getLeafletModalImageVisualTarget(): Promise<CarnaubaLeafletVisualTarget> {
+    return Promise.resolve({
+      page: new PlaywrightVisualDatasetPage(this.page),
+      target: new PlaywrightVisualActionTarget(
+        this.modalImageLocator(),
+        'Carnauba leaflet modal visible image',
+        this.timeoutMs,
+      ),
+    });
+  }
+
   async closeLeafletModal(): Promise<void> {
     const modal = this.modalLocator();
     await modal.locator('button.close, [aria-label="Close"]').first().click({
@@ -174,6 +185,10 @@ class PlaywrightCarnaubaLeafletPage implements CarnaubaLeafletPage {
 
   private modalLocator(): Locator {
     return this.page.locator('.modal.show[role="dialog"]').first();
+  }
+
+  private modalImageLocator(): Locator {
+    return this.modalLocator().locator('img:visible').first();
   }
 }
 

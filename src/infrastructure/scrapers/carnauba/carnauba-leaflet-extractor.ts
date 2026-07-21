@@ -11,7 +11,11 @@ import type {
   LeafletExtractionResult,
 } from '../../../domain/leaflet/extracted-leaflet';
 import type { VisualViewport } from '../../../domain/visual/viewport';
-import type { CarnaubaLeafletCard, CarnaubaLeafletPageFactory } from './carnauba-leaflet-page';
+import type {
+  CarnaubaLeafletCard,
+  CarnaubaLeafletPageFactory,
+  OpenedCarnaubaLeaflet,
+} from './carnauba-leaflet-page';
 import { createLeafletId } from './leaflet-id';
 
 export interface ExtractCarnaubaLeafletsInput {
@@ -90,6 +94,7 @@ export class CarnaubaLeafletExtractor {
         await this.captureVisualDatasetSampleIfEnabled(page, input, card, cardIndex);
         const openedLeaflet = await page.openLeafletAt(cardIndex);
         const imageUrls = deduplicateImageUrls(openedLeaflet.imageUrls);
+        const title = resolveLeafletTitle(card, openedLeaflet);
 
         if (imageUrls.length === 0) {
           throw new CarnaubaLeafletExtractionError(
@@ -97,7 +102,23 @@ export class CarnaubaLeafletExtractor {
           );
         }
 
-        leaflets.push(createExtractedLeaflet(card, openedLeaflet.title, cardIndex, imageUrls));
+        const firstImageUrl = imageUrls[0];
+
+        if (firstImageUrl === undefined) {
+          throw new CarnaubaLeafletExtractionError(
+            `Leaflet card ${String(cardIndex)} did not expose a first modal image URL.`,
+          );
+        }
+
+        await this.captureModalImageVisualDatasetSampleIfEnabled(
+          page,
+          input,
+          cardIndex,
+          title,
+          firstImageUrl,
+        );
+
+        leaflets.push(createExtractedLeaflet(card, title, cardIndex, imageUrls));
         await page.closeLeafletModal();
       }
 
@@ -177,6 +198,46 @@ export class CarnaubaLeafletExtractor {
       target: visualTarget.target,
     });
   }
+
+  private async captureModalImageVisualDatasetSampleIfEnabled(
+    page: Awaited<ReturnType<CarnaubaLeafletPageFactory['openPage']>>,
+    input: ExtractCarnaubaLeafletsInput,
+    cardIndex: number,
+    leafletTitle: string,
+    imageUrl: string,
+  ): Promise<void> {
+    if (input.visualDataset === undefined || this.visualDatasetCaptureService === undefined) {
+      return;
+    }
+
+    const visualTarget = await page.getLeafletModalImageVisualTarget();
+
+    await this.visualDatasetCaptureService.captureBeforeAction({
+      sampleId: createModalImageVisualDatasetSampleId(
+        input.visualDataset.runId,
+        input.visualDataset.storeId,
+        leafletTitle,
+        cardIndex,
+        0,
+      ),
+      runId: input.visualDataset.runId,
+      supermarketId: 'carnauba',
+      stateName: 'LEAFLET_MODAL',
+      label: 'extract_leaflet_image',
+      subject: {
+        subjectKind: 'carnauba-leaflet-image',
+        storeId: input.visualDataset.storeId,
+        storeName: input.visualDataset.storeName,
+        cardIndex,
+        leafletTitle,
+        imageIndex: 0,
+        imageUrl,
+      },
+      split: input.visualDataset.split,
+      page: visualTarget.page,
+      target: visualTarget.target,
+    });
+  }
 }
 
 function validateInput(input: ExtractCarnaubaLeafletsInput): void {
@@ -205,12 +266,10 @@ function validatePositiveInteger(value: number, fieldName: string): void {
 
 function createExtractedLeaflet(
   card: CarnaubaLeafletCard,
-  openedTitle: string,
+  title: string,
   cardIndex: number,
   imageUrls: readonly string[],
 ): ExtractedLeaflet {
-  const title = openedTitle.trim().length > 0 ? openedTitle.trim() : card.title;
-
   return {
     leafletId: createLeafletId(title, cardIndex),
     title,
@@ -223,6 +282,15 @@ function createExtractedLeaflet(
       };
     }),
   };
+}
+
+function resolveLeafletTitle(
+  card: CarnaubaLeafletCard,
+  openedLeaflet: OpenedCarnaubaLeaflet,
+): string {
+  const title = openedLeaflet.title.trim();
+
+  return title.length > 0 ? title : card.title;
 }
 
 function deduplicateImageUrls(imageUrls: readonly string[]): readonly string[] {
@@ -240,4 +308,17 @@ function createVisualDatasetSampleId(
 
 function createHomeVisualDatasetSampleId(runId: string, storeId: number): string {
   return `${runId}-store-${String(storeId)}-open-leaflets-page`;
+}
+
+function createModalImageVisualDatasetSampleId(
+  runId: string,
+  storeId: number,
+  title: string,
+  cardIndex: number,
+  imageIndex: number,
+): string {
+  return `${runId}-store-${String(storeId)}-card-${createLeafletId(
+    title,
+    cardIndex,
+  )}-image-${String(imageIndex + 1)}`;
 }
