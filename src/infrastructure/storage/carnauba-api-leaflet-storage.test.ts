@@ -31,12 +31,12 @@ describe('LocalCarnaubaApiLeafletStorage', () => {
       result: createResult(),
     });
 
-    expect(stored.directoryPath).toBe(join(rootDirectory, 'carnauba/2026-07-17'));
+    expect(stored.directoryPath).toBe(join(rootDirectory, 'carnauba/2026-07-17/10-00'));
     expect(stored.stores).toHaveLength(2);
     expect(stored.stores[0]?.leaflets[0]?.images[0]?.filePath).toBe(
       join(
         rootDirectory,
-        'carnauba/2026-07-17/stores/79-carnauba-maestro/leaflets/69362-1-sao-joao/001.png',
+        'carnauba/2026-07-17/10-00/stores/79-carnauba-maestro/leaflets/69362-1-sao-joao/001.png',
       ),
     );
     expect(await readFile(stored.stores[0]?.leaflets[0]?.images[0]?.filePath ?? '')).toEqual(

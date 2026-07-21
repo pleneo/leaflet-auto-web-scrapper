@@ -190,17 +190,15 @@ function buildExtractionDirectoryPath(
     throw new CarnaubaApiLeafletStorageError('rootDirectory cannot be blank.');
   }
 
-  const extractionDate = result.extractedAtIso.slice(0, 10);
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(extractionDate)) {
-    throw new CarnaubaApiLeafletStorageError('extractedAtIso must start with an ISO date.');
-  }
-
   if (!Number.isFinite(Date.parse(result.extractedAtIso))) {
     throw new CarnaubaApiLeafletStorageError('extractedAtIso must be a valid ISO date.');
   }
 
-  return join(trimmedRoot, 'carnauba', extractionDate);
+  const extractedAtIso = new Date(result.extractedAtIso).toISOString();
+  const extractionDate = extractedAtIso.slice(0, 10);
+  const extractionHourMinute = extractedAtIso.slice(11, 16).replace(':', '-');
+
+  return join(trimmedRoot, 'carnauba', extractionDate, extractionHourMinute);
 }
 
 function slugify(value: string): string {
