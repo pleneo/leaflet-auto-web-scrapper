@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { readdir } from 'node:fs/promises';
 import { VisualDatasetCaptureService } from '../../application/services/visual-dataset-capture-service';
 import { ConsoleLogger } from '../logging/console-logger';
 import { FileSystemVisualDatasetSampleRepository } from '../repositories/file-system-visual-dataset-sample-repository';
@@ -12,6 +13,7 @@ import { LocalCarnaubaPlaywrightLeafletStorage } from '../storage/carnauba-playw
 import { FetchLeafletImageHttpClient } from '../storage/fetch-leaflet-image-http-client';
 import { SystemClock } from '../time/system-clock';
 import { parseCarnaubaPlaywrightCommandOptions } from './carnauba-playwright-command-options';
+import { createCarnaubaRunManifest, writeCarnaubaRunManifest } from './carnauba-run-manifest';
 
 async function main(): Promise<void> {
   try {
@@ -39,10 +41,11 @@ async function run(): Promise<void> {
   const clock = new SystemClock();
   const startedAtIso = clock.nowIso();
   const runId = createRunId(startedAtIso);
+  const visualDatasetRootDirectory = resolve(process.cwd(), options.visualDatasetRootDirectory);
   const visualDatasetCaptureService = options.visualDatasetEnabled
     ? new VisualDatasetCaptureService(
         new FileSystemVisualDatasetSampleRepository({
-          rootDirectory: resolve(process.cwd(), options.visualDatasetRootDirectory),
+          rootDirectory: visualDatasetRootDirectory,
         }),
         clock,
       )
@@ -85,17 +88,67 @@ async function run(): Promise<void> {
     rootDirectory: resolve(process.cwd(), options.outputRootDirectory),
     result,
   });
+  const completedAtIso = clock.nowIso();
+  const manifest = createCarnaubaRunManifest({
+    runId,
+    startedAtIso,
+    completedAtIso,
+    outputDirectoryPath: stored.directoryPath,
+    metadataPath: stored.metadataPath,
+    result,
+    stored,
+    visualDataset: {
+      enabled: options.visualDatasetEnabled,
+      rootDirectory: options.visualDatasetEnabled ? visualDatasetRootDirectory : null,
+      samplesCreated: options.visualDatasetEnabled
+        ? await countVisualDatasetAnnotations(visualDatasetRootDirectory, runId)
+        : 0,
+    },
+  });
+  const manifestPath = await writeCarnaubaRunManifest(stored.directoryPath, manifest);
 
   logger.info('Carnauba Playwright extraction completed.', {
     stores: result.stores.length,
     leaflets: result.stores.reduce((total, store) => total + store.leaflets.length, 0),
     output: stored.directoryPath,
+    manifestPath,
     runId,
   });
 }
 
 function createRunId(startedAtIso: string): string {
   return `carnauba-playwright-${startedAtIso.replace(/[:.]/g, '-')}`;
+}
+
+async function countVisualDatasetAnnotations(
+  rootDirectory: string,
+  runId: string,
+): Promise<number> {
+  const filePaths = await listFiles(rootDirectory);
+
+  return filePaths.filter(
+    (filePath) => filePath.endsWith('/annotation.json') && filePath.includes(`/${runId}/`),
+  ).length;
+}
+
+async function listFiles(directoryPath: string): Promise<readonly string[]> {
+  const entries = await readdir(directoryPath, {
+    withFileTypes: true,
+  }).catch(() => []);
+  const filePaths: string[] = [];
+
+  for (const entry of entries) {
+    const entryPath = `${directoryPath}/${entry.name}`;
+
+    if (entry.isDirectory()) {
+      filePaths.push(...(await listFiles(entryPath)));
+      continue;
+    }
+
+    filePaths.push(entryPath);
+  }
+
+  return filePaths;
 }
 
 void main();
