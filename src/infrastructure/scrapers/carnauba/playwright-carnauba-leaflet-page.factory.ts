@@ -2,10 +2,15 @@ import { chromium, type Browser, type BrowserContext, type Locator, type Page } 
 import type {
   CarnaubaLeafletCard,
   CarnaubaLeafletPage,
+  CarnaubaLeafletVisualTarget,
   CarnaubaLeafletPageFactory,
   OpenCarnaubaLeafletPageInput,
   OpenedCarnaubaLeaflet,
 } from './carnauba-leaflet-page';
+import {
+  PlaywrightVisualActionTarget,
+  PlaywrightVisualDatasetPage,
+} from '../../playwright/playwright-visual-dataset-page';
 
 interface RawCarnaubaLeafletCard {
   readonly title: string;
@@ -78,6 +83,17 @@ class PlaywrightCarnaubaLeafletPage implements CarnaubaLeafletPage {
     });
 
     return cards;
+  }
+
+  getLeafletCardVisualTarget(cardIndex: number): Promise<CarnaubaLeafletVisualTarget> {
+    return Promise.resolve({
+      page: new PlaywrightVisualDatasetPage(this.page),
+      target: new PlaywrightVisualActionTarget(
+        this.cardLocator().nth(cardIndex),
+        `Carnauba leaflet card ${String(cardIndex + 1)}`,
+        this.timeoutMs,
+      ),
+    });
   }
 
   async openLeafletAt(cardIndex: number): Promise<OpenedCarnaubaLeaflet> {

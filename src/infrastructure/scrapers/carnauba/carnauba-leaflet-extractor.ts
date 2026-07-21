@@ -1,6 +1,11 @@
 import type { Clock } from '../../../application/ports/clock';
 import type { Logger } from '../../../application/ports/logger';
 import type {
+  CaptureVisualDatasetSampleInput,
+  VisualDatasetCaptureService,
+} from '../../../application/services/visual-dataset-capture-service';
+import type { DatasetSplit } from '../../../domain/dataset/dataset-split';
+import type {
   ExtractedLeaflet,
   ExtractedLeafletImage,
   LeafletExtractionResult,
@@ -14,6 +19,20 @@ export interface ExtractCarnaubaLeafletsInput {
   readonly viewport: VisualViewport;
   readonly timeoutMs: number;
   readonly settleDelayMs: number;
+  readonly visualDataset?: ExtractCarnaubaVisualDatasetInput;
+}
+
+export interface ExtractCarnaubaVisualDatasetInput {
+  readonly runId: string;
+  readonly storeId: number;
+  readonly storeName: string;
+  readonly split: DatasetSplit;
+}
+
+interface CarnaubaVisualDatasetCaptureService {
+  captureBeforeAction(
+    input: CaptureVisualDatasetSampleInput,
+  ): ReturnType<VisualDatasetCaptureService['captureBeforeAction']>;
 }
 
 export class CarnaubaLeafletExtractionError extends Error {
@@ -30,10 +49,18 @@ export class CarnaubaLeafletExtractor {
 
   private readonly logger: Logger;
 
-  constructor(pageFactory: CarnaubaLeafletPageFactory, clock: Clock, logger: Logger) {
+  private readonly visualDatasetCaptureService: CarnaubaVisualDatasetCaptureService | undefined;
+
+  constructor(
+    pageFactory: CarnaubaLeafletPageFactory,
+    clock: Clock,
+    logger: Logger,
+    visualDatasetCaptureService?: CarnaubaVisualDatasetCaptureService,
+  ) {
     this.pageFactory = pageFactory;
     this.clock = clock;
     this.logger = logger;
+    this.visualDatasetCaptureService = visualDatasetCaptureService;
   }
 
   async extract(input: ExtractCarnaubaLeafletsInput): Promise<LeafletExtractionResult> {
@@ -56,6 +83,7 @@ export class CarnaubaLeafletExtractor {
       const leaflets: ExtractedLeaflet[] = [];
 
       for (const [cardIndex, card] of cards.entries()) {
+        await this.captureVisualDatasetSampleIfEnabled(page, input, card, cardIndex);
         const openedLeaflet = await page.openLeafletAt(cardIndex);
         const imageUrls = deduplicateImageUrls(openedLeaflet.imageUrls);
 
@@ -78,6 +106,42 @@ export class CarnaubaLeafletExtractor {
     } finally {
       await page.close();
     }
+  }
+
+  private async captureVisualDatasetSampleIfEnabled(
+    page: Awaited<ReturnType<CarnaubaLeafletPageFactory['openPage']>>,
+    input: ExtractCarnaubaLeafletsInput,
+    card: CarnaubaLeafletCard,
+    cardIndex: number,
+  ): Promise<void> {
+    if (input.visualDataset === undefined || this.visualDatasetCaptureService === undefined) {
+      return;
+    }
+
+    const visualTarget = await page.getLeafletCardVisualTarget(cardIndex);
+
+    await this.visualDatasetCaptureService.captureBeforeAction({
+      sampleId: createVisualDatasetSampleId(
+        input.visualDataset.runId,
+        input.visualDataset.storeId,
+        card.title,
+        cardIndex,
+      ),
+      runId: input.visualDataset.runId,
+      supermarketId: 'carnauba',
+      stateName: 'LEAFLETS_PAGE',
+      label: 'open_leaflet_modal_button',
+      subject: {
+        subjectKind: 'carnauba-leaflet-card',
+        storeId: input.visualDataset.storeId,
+        storeName: input.visualDataset.storeName,
+        cardIndex,
+        leafletTitle: card.title,
+      },
+      split: input.visualDataset.split,
+      page: visualTarget.page,
+      target: visualTarget.target,
+    });
   }
 }
 
@@ -128,4 +192,13 @@ function createExtractedLeaflet(
 
 function deduplicateImageUrls(imageUrls: readonly string[]): readonly string[] {
   return [...new Set(imageUrls.map((imageUrl) => imageUrl.trim()).filter(Boolean))];
+}
+
+function createVisualDatasetSampleId(
+  runId: string,
+  storeId: number,
+  title: string,
+  cardIndex: number,
+): string {
+  return `${runId}-store-${String(storeId)}-card-${createLeafletId(title, cardIndex)}`;
 }

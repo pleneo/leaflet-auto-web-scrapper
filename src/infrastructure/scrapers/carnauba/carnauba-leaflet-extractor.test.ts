@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { Clock } from '../../../application/ports/clock';
 import type { LogContext, Logger } from '../../../application/ports/logger';
+import type {
+  VisualActionTarget,
+  VisualDatasetPage,
+} from '../../../application/ports/visual-dataset-page';
+import type { CaptureVisualDatasetSampleInput } from '../../../application/services/visual-dataset-capture-service';
 import { createVisualViewport } from '../../../domain/visual/viewport';
 import type {
   CarnaubaLeafletCard,
   CarnaubaLeafletPage,
   CarnaubaLeafletPageFactory,
+  CarnaubaLeafletVisualTarget,
   OpenCarnaubaLeafletPageInput,
   OpenedCarnaubaLeaflet,
 } from './carnauba-leaflet-page';
@@ -118,6 +124,59 @@ describe('CarnaubaLeafletExtractor', () => {
     expect(result.leaflets[0]?.leafletId).toBe('1-fallback-title');
   });
 
+  it('captures visual dataset samples before opening leaflet cards', async () => {
+    const page = new FakeCarnaubaLeafletPage({
+      cards: [
+        {
+          title: 'São João',
+          coverImageUrl: 'https://cdn.example.com/cover.png',
+        },
+      ],
+      openedLeaflets: [
+        {
+          title: 'São João',
+          imageUrls: ['https://cdn.example.com/page.png'],
+        },
+      ],
+    });
+    const visualDatasetCaptureService = new FakeVisualDatasetCaptureService(page.events);
+    const extractor = createExtractor(page, visualDatasetCaptureService);
+
+    await extractor.extract({
+      sourceUrl: 'https://carnaubasupermercados.com.br/loja/79/encartes',
+      viewport: createVisualViewport({
+        width: 1366,
+        height: 768,
+      }),
+      timeoutMs: 30_000,
+      settleDelayMs: 0,
+      visualDataset: {
+        runId: 'run-1',
+        storeId: 79,
+        storeName: 'Maestro',
+        split: 'unassigned',
+      },
+    });
+
+    expect(page.events).toEqual(['capture-0', 'open-0']);
+    expect(visualDatasetCaptureService.inputs).toHaveLength(1);
+    expect(visualDatasetCaptureService.inputs[0]).toMatchObject({
+      sampleId: 'run-1-store-79-card-1-sao-joao',
+      runId: 'run-1',
+      supermarketId: 'carnauba',
+      stateName: 'LEAFLETS_PAGE',
+      label: 'open_leaflet_modal_button',
+      subject: {
+        subjectKind: 'carnauba-leaflet-card',
+        storeId: 79,
+        storeName: 'Maestro',
+        cardIndex: 0,
+        leafletTitle: 'São João',
+      },
+      split: 'unassigned',
+    });
+  });
+
   it('closes the page when extraction fails', async () => {
     const page = new FakeCarnaubaLeafletPage({
       cards: [
@@ -188,11 +247,15 @@ describe('CarnaubaLeafletExtractor', () => {
   });
 });
 
-function createExtractor(page: FakeCarnaubaLeafletPage): CarnaubaLeafletExtractor {
+function createExtractor(
+  page: FakeCarnaubaLeafletPage,
+  visualDatasetCaptureService?: FakeVisualDatasetCaptureService,
+): CarnaubaLeafletExtractor {
   return new CarnaubaLeafletExtractor(
     new FakeCarnaubaLeafletPageFactory(page),
     new FixedClock(),
     new MemoryLogger(),
+    visualDatasetCaptureService,
   );
 }
 
@@ -218,6 +281,8 @@ interface FakeCarnaubaLeafletPageConfig {
 }
 
 class FakeCarnaubaLeafletPage implements CarnaubaLeafletPage {
+  readonly events: string[] = [];
+
   readonly gotoUrls: string[] = [];
 
   readonly waitCalls: number[] = [];
@@ -251,7 +316,15 @@ class FakeCarnaubaLeafletPage implements CarnaubaLeafletPage {
     return Promise.resolve(this.cards);
   }
 
+  getLeafletCardVisualTarget(cardIndex: number): Promise<CarnaubaLeafletVisualTarget> {
+    return Promise.resolve({
+      page: new FakeVisualDatasetPage(),
+      target: new FakeVisualActionTarget(cardIndex),
+    });
+  }
+
   openLeafletAt(cardIndex: number): Promise<OpenedCarnaubaLeaflet> {
+    this.events.push(`open-${String(cardIndex)}`);
     this.openedIndexes.push(cardIndex);
     const openedLeaflet = this.openedLeaflets[cardIndex];
 
@@ -270,6 +343,52 @@ class FakeCarnaubaLeafletPage implements CarnaubaLeafletPage {
   close(): Promise<void> {
     this.closed = true;
     return Promise.resolve();
+  }
+}
+
+class FakeVisualDatasetPage implements VisualDatasetPage {
+  captureFullPageSnapshot(): never {
+    throw new Error('Fake capture service should not call the page.');
+  }
+}
+
+class FakeVisualActionTarget implements VisualActionTarget {
+  readonly locatorDescription: string;
+
+  constructor(cardIndex: number) {
+    this.locatorDescription = `card-${String(cardIndex)}`;
+  }
+
+  scrollIntoView(): never {
+    throw new Error('Fake capture service should not call the target.');
+  }
+
+  isVisible(): never {
+    throw new Error('Fake capture service should not call the target.');
+  }
+
+  isEnabled(): never {
+    throw new Error('Fake capture service should not call the target.');
+  }
+
+  getViewportBoundingBox(): never {
+    throw new Error('Fake capture service should not call the target.');
+  }
+}
+
+class FakeVisualDatasetCaptureService {
+  readonly inputs: CaptureVisualDatasetSampleInput[] = [];
+
+  private readonly events: string[];
+
+  constructor(events: string[]) {
+    this.events = events;
+  }
+
+  captureBeforeAction(input: CaptureVisualDatasetSampleInput): Promise<never> {
+    this.events.push(`capture-${String(input.subject.cardIndex)}`);
+    this.inputs.push(input);
+    return Promise.resolve(undefined as never);
   }
 }
 
