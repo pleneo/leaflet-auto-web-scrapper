@@ -199,7 +199,10 @@ class PlaywrightCarnaubaLeafletPage implements CarnaubaLeafletPage {
   }
 
   private modalImageLocator(imageIndex: number): Locator {
-    return this.modalLocator().locator('[style*="background-image"]:visible').nth(imageIndex);
+    return this.modalLocator()
+      .locator('[style*="background-image"]:visible')
+      .nth(imageIndex)
+      .locator('xpath=..');
   }
 
   private modalCloseButtonLocator(): Locator {
