@@ -303,21 +303,15 @@ function withTimeout<TValue>(
   timeoutMs: number,
   message: string,
 ): Promise<TValue> {
-  return new Promise((resolvePromise, rejectPromise) => {
-    const timeout = setTimeout(() => {
+  let timeout: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<never>((_resolvePromise, rejectPromise) => {
+    timeout = setTimeout(() => {
       rejectPromise(new CarnaubaPlaywrightExtractionError(message));
     }, timeoutMs);
+  });
 
-    promise.then(
-      (value) => {
-        clearTimeout(timeout);
-        resolvePromise(value);
-      },
-      (error: Error) => {
-        clearTimeout(timeout);
-        rejectPromise(error);
-      },
-    );
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timeout);
   });
 }
 
