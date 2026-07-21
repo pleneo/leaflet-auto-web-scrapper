@@ -171,8 +171,9 @@ describe('CarnaubaLeafletExtractor', () => {
       'open-0',
       'capture-image-0-0',
       'capture-image-0-1',
+      'capture-close-0',
     ]);
-    expect(visualDatasetCaptureService.inputs).toHaveLength(4);
+    expect(visualDatasetCaptureService.inputs).toHaveLength(5);
     expect(visualDatasetCaptureService.inputs[0]).toMatchObject({
       sampleId: 'run-1-store-79-open-leaflets-page',
       runId: 'run-1',
@@ -232,6 +233,21 @@ describe('CarnaubaLeafletExtractor', () => {
         leafletTitle: 'São João',
         imageIndex: 1,
         imageUrl: 'https://cdn.example.com/page-2.png',
+      },
+      split: 'unassigned',
+    });
+    expect(visualDatasetCaptureService.inputs[4]).toMatchObject({
+      sampleId: 'run-1-store-79-card-1-sao-joao-close-modal',
+      runId: 'run-1',
+      supermarketId: 'carnauba',
+      stateName: 'LEAFLET_MODAL',
+      label: 'close_modal_button',
+      subject: {
+        subjectKind: 'carnauba-leaflet-modal-close',
+        storeId: 79,
+        storeName: 'Maestro',
+        cardIndex: 0,
+        leafletTitle: 'São João',
       },
       split: 'unassigned',
     });
@@ -424,6 +440,13 @@ class FakeCarnaubaLeafletPage implements CarnaubaLeafletPage {
     });
   }
 
+  getLeafletModalCloseVisualTarget(): Promise<CarnaubaLeafletVisualTarget> {
+    return Promise.resolve({
+      page: new FakeVisualDatasetPage(),
+      target: new FakeVisualActionTarget('modal-close'),
+    });
+  }
+
   closeLeafletModal(): Promise<void> {
     this.closeModalCalls += 1;
     return Promise.resolve();
@@ -448,6 +471,7 @@ class FakeVisualActionTarget implements VisualActionTarget {
     target:
       | number
       | 'home'
+      | 'modal-close'
       | {
           readonly targetKind: 'modal-image';
           readonly imageIndex: number;
@@ -460,6 +484,11 @@ class FakeVisualActionTarget implements VisualActionTarget {
 
     if (typeof target === 'object') {
       this.locatorDescription = `modal-image-${String(target.imageIndex)}`;
+      return;
+    }
+
+    if (target === 'modal-close') {
+      this.locatorDescription = 'modal-close';
       return;
     }
 
@@ -507,6 +536,8 @@ function createCaptureEventName(subject: CaptureVisualDatasetSampleInput['subjec
       return `capture-card-${String(subject.cardIndex)}`;
     case 'carnauba-leaflet-image':
       return `capture-image-${String(subject.cardIndex)}-${String(subject.imageIndex)}`;
+    case 'carnauba-leaflet-modal-close':
+      return `capture-close-${String(subject.cardIndex)}`;
   }
 }
 
