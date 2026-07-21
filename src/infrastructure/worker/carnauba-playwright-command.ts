@@ -1,5 +1,7 @@
 import { resolve } from 'node:path';
+import { VisualDatasetCaptureService } from '../../application/services/visual-dataset-capture-service';
 import { ConsoleLogger } from '../logging/console-logger';
+import { FileSystemVisualDatasetSampleRepository } from '../repositories/file-system-visual-dataset-sample-repository';
 import { CarnaubaLeafletExtractor } from '../scrapers/carnauba/carnauba-leaflet-extractor';
 import { CarnaubaPlaywrightExtractionService } from '../scrapers/carnauba/carnauba-playwright-extraction';
 import { MercadappCarnaubaApiClient } from '../scrapers/carnauba/mercadapp-api-client';
@@ -35,24 +37,50 @@ async function run(): Promise<void> {
     authTokenProvider,
   });
   const clock = new SystemClock();
+  const startedAtIso = clock.nowIso();
+  const runId = createRunId(startedAtIso);
+  const visualDatasetCaptureService = options.visualDatasetEnabled
+    ? new VisualDatasetCaptureService(
+        new FileSystemVisualDatasetSampleRepository({
+          rootDirectory: resolve(process.cwd(), options.visualDatasetRootDirectory),
+        }),
+        clock,
+      )
+    : undefined;
   const service = new CarnaubaPlaywrightExtractionService(
     apiClient,
     new StoreSnapshotCache({
       cacheRootDirectory: resolve(process.cwd(), options.cacheRootDirectory),
     }),
-    new CarnaubaLeafletExtractor(new PlaywrightCarnaubaLeafletPageFactory(), clock, logger),
+    new CarnaubaLeafletExtractor(
+      new PlaywrightCarnaubaLeafletPageFactory(),
+      clock,
+      logger,
+      visualDatasetCaptureService,
+    ),
     clock,
     logger,
   );
   const storage = new LocalCarnaubaPlaywrightLeafletStorage(new FetchLeafletImageHttpClient());
-  const result = await service.extract({
+  const extractionInput = {
     brandId: options.brandId,
     storeCacheTtlMs: options.cacheTtlMs,
     siteBaseUrl: options.siteBaseUrl,
     viewport: options.viewport,
     timeoutMs: options.timeoutMs,
     settleDelayMs: options.settleDelayMs,
-  });
+  };
+  const result = await service.extract(
+    options.visualDatasetEnabled
+      ? {
+          ...extractionInput,
+          visualDataset: {
+            runId,
+            split: options.visualDatasetSplit,
+          },
+        }
+      : extractionInput,
+  );
   const stored = await storage.store({
     rootDirectory: resolve(process.cwd(), options.outputRootDirectory),
     result,
@@ -62,7 +90,12 @@ async function run(): Promise<void> {
     stores: result.stores.length,
     leaflets: result.stores.reduce((total, store) => total + store.leaflets.length, 0),
     output: stored.directoryPath,
+    runId,
   });
+}
+
+function createRunId(startedAtIso: string): string {
+  return `carnauba-playwright-${startedAtIso.replace(/[:.]/g, '-')}`;
 }
 
 void main();

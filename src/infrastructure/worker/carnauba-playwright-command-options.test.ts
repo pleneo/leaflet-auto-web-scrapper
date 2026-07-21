@@ -20,13 +20,27 @@ describe('parseCarnaubaPlaywrightCommandOptions', () => {
       },
       timeoutMs: 30_000,
       settleDelayMs: 5_000,
+      visualDatasetEnabled: true,
+      visualDatasetRootDirectory: '.data/visual-dataset',
+      visualDatasetSplit: 'unassigned',
     });
   });
 
   it('uses environment values and CLI overrides', () => {
     expect(
       parseCarnaubaPlaywrightCommandOptions(
-        ['--brand-id', '28', '--output-root', '.data/browser-out', '--width', '390'],
+        [
+          '--brand-id',
+          '28',
+          '--output-root',
+          '.data/browser-out',
+          '--width',
+          '390',
+          '--visual-dataset-enabled',
+          'false',
+          '--visual-dataset-split',
+          'train',
+        ],
         {
           CARNAUBA_API_BASE_URL: 'https://example.com/api',
           CARNAUBA_SITE_BASE_URL: 'https://example.com',
@@ -37,6 +51,8 @@ describe('parseCarnaubaPlaywrightCommandOptions', () => {
           CARNAUBA_PLAYWRIGHT_DEVICE_SCALE_FACTOR: '3',
           CARNAUBA_PLAYWRIGHT_TIMEOUT_MS: '5000',
           CARNAUBA_PLAYWRIGHT_SETTLE_DELAY_MS: '1000',
+          CARNAUBA_VISUAL_DATASET_DIR: '.data/env-visual-dataset',
+          CARNAUBA_VISUAL_DATASET_SPLIT: 'validation',
         },
       ),
     ).toEqual({
@@ -53,6 +69,9 @@ describe('parseCarnaubaPlaywrightCommandOptions', () => {
       },
       timeoutMs: 5_000,
       settleDelayMs: 1_000,
+      visualDatasetEnabled: false,
+      visualDatasetRootDirectory: '.data/env-visual-dataset',
+      visualDatasetSplit: 'train',
     });
   });
 
@@ -78,5 +97,11 @@ describe('parseCarnaubaPlaywrightCommandOptions', () => {
     expect(() => parseCarnaubaPlaywrightCommandOptions(['--device-scale-factor', '0'], {})).toThrow(
       InvalidCarnaubaPlaywrightCommandOptionsError,
     );
+    expect(() =>
+      parseCarnaubaPlaywrightCommandOptions(['--visual-dataset-enabled', 'yes'], {}),
+    ).toThrow(InvalidCarnaubaPlaywrightCommandOptionsError);
+    expect(() =>
+      parseCarnaubaPlaywrightCommandOptions(['--visual-dataset-split', 'invalid'], {}),
+    ).toThrow(InvalidCarnaubaPlaywrightCommandOptionsError);
   });
 });

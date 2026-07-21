@@ -23,6 +23,7 @@
     "capture:smoke": "tsx src/infrastructure/worker/visual-capture-smoke-command.ts",
     "carnauba:leaflets:smoke": "tsx src/infrastructure/worker/carnauba-leaflets-smoke-command.ts",
     "carnauba:playwright": "tsx src/infrastructure/worker/carnauba-playwright-command.ts",
+    "carnauba:visual": "npm run carnauba:playwright",
     "carnauba:ap": "npm run carnauba:api",
     "carnauba:api": "tsx src/infrastructure/worker/carnauba-api-extract-command.ts",
     "carnauba:api:extract": "tsx src/infrastructure/worker/carnauba-api-extract-command.ts",
