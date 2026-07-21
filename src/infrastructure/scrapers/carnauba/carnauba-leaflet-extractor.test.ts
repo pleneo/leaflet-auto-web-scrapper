@@ -140,7 +140,7 @@ describe('CarnaubaLeafletExtractor', () => {
       openedLeaflets: [
         {
           title: 'São João',
-          imageUrls: ['https://cdn.example.com/page.png'],
+          imageUrls: ['https://cdn.example.com/page-1.png', 'https://cdn.example.com/page-2.png'],
         },
       ],
     });
@@ -164,8 +164,15 @@ describe('CarnaubaLeafletExtractor', () => {
       },
     });
 
-    expect(page.events).toEqual(['capture-home', 'open-leaflets-page', 'capture-0', 'open-0']);
-    expect(visualDatasetCaptureService.inputs).toHaveLength(2);
+    expect(page.events).toEqual([
+      'capture-home',
+      'open-leaflets-page',
+      'capture-card-0',
+      'open-0',
+      'capture-image-0-0',
+      'capture-image-0-1',
+    ]);
+    expect(visualDatasetCaptureService.inputs).toHaveLength(4);
     expect(visualDatasetCaptureService.inputs[0]).toMatchObject({
       sampleId: 'run-1-store-79-open-leaflets-page',
       runId: 'run-1',
@@ -191,6 +198,40 @@ describe('CarnaubaLeafletExtractor', () => {
         storeName: 'Maestro',
         cardIndex: 0,
         leafletTitle: 'São João',
+      },
+      split: 'unassigned',
+    });
+    expect(visualDatasetCaptureService.inputs[2]).toMatchObject({
+      sampleId: 'run-1-store-79-card-1-sao-joao-image-1',
+      runId: 'run-1',
+      supermarketId: 'carnauba',
+      stateName: 'LEAFLET_MODAL',
+      label: 'extract_leaflet_image',
+      subject: {
+        subjectKind: 'carnauba-leaflet-image',
+        storeId: 79,
+        storeName: 'Maestro',
+        cardIndex: 0,
+        leafletTitle: 'São João',
+        imageIndex: 0,
+        imageUrl: 'https://cdn.example.com/page-1.png',
+      },
+      split: 'unassigned',
+    });
+    expect(visualDatasetCaptureService.inputs[3]).toMatchObject({
+      sampleId: 'run-1-store-79-card-1-sao-joao-image-2',
+      runId: 'run-1',
+      supermarketId: 'carnauba',
+      stateName: 'LEAFLET_MODAL',
+      label: 'extract_leaflet_image',
+      subject: {
+        subjectKind: 'carnauba-leaflet-image',
+        storeId: 79,
+        storeName: 'Maestro',
+        cardIndex: 0,
+        leafletTitle: 'São João',
+        imageIndex: 1,
+        imageUrl: 'https://cdn.example.com/page-2.png',
       },
       split: 'unassigned',
     });
@@ -373,6 +414,16 @@ class FakeCarnaubaLeafletPage implements CarnaubaLeafletPage {
     return Promise.resolve(openedLeaflet);
   }
 
+  getLeafletModalImageVisualTarget(imageIndex: number): Promise<CarnaubaLeafletVisualTarget> {
+    return Promise.resolve({
+      page: new FakeVisualDatasetPage(),
+      target: new FakeVisualActionTarget({
+        targetKind: 'modal-image',
+        imageIndex,
+      }),
+    });
+  }
+
   closeLeafletModal(): Promise<void> {
     this.closeModalCalls += 1;
     return Promise.resolve();
@@ -393,8 +444,26 @@ class FakeVisualDatasetPage implements VisualDatasetPage {
 class FakeVisualActionTarget implements VisualActionTarget {
   readonly locatorDescription: string;
 
-  constructor(target: number | 'home') {
-    this.locatorDescription = target === 'home' ? 'home-leaflets' : `card-${String(target)}`;
+  constructor(
+    target:
+      | number
+      | 'home'
+      | {
+          readonly targetKind: 'modal-image';
+          readonly imageIndex: number;
+        },
+  ) {
+    if (target === 'home') {
+      this.locatorDescription = 'home-leaflets';
+      return;
+    }
+
+    if (typeof target === 'object') {
+      this.locatorDescription = `modal-image-${String(target.imageIndex)}`;
+      return;
+    }
+
+    this.locatorDescription = `card-${String(target)}`;
   }
 
   scrollIntoView(): never {
@@ -435,7 +504,9 @@ function createCaptureEventName(subject: CaptureVisualDatasetSampleInput['subjec
     case 'carnauba-home-leaflets-link':
       return 'capture-home';
     case 'carnauba-leaflet-card':
-      return `capture-${String(subject.cardIndex)}`;
+      return `capture-card-${String(subject.cardIndex)}`;
+    case 'carnauba-leaflet-image':
+      return `capture-image-${String(subject.cardIndex)}-${String(subject.imageIndex)}`;
   }
 }
 

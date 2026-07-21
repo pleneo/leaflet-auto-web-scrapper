@@ -20,6 +20,16 @@ export interface CarnaubaLeafletCardVisualDatasetSubject {
   readonly leafletTitle: string;
 }
 
+export interface CarnaubaLeafletImageVisualDatasetSubject {
+  readonly subjectKind: 'carnauba-leaflet-image';
+  readonly storeId: number;
+  readonly storeName: string;
+  readonly cardIndex: number;
+  readonly leafletTitle: string;
+  readonly imageIndex: number;
+  readonly imageUrl: string;
+}
+
 export interface CarnaubaHomeLeafletsLinkVisualDatasetSubject {
   readonly subjectKind: 'carnauba-home-leaflets-link';
   readonly storeId: number;
@@ -27,7 +37,9 @@ export interface CarnaubaHomeLeafletsLinkVisualDatasetSubject {
 }
 
 export type VisualDatasetSubject =
-  CarnaubaHomeLeafletsLinkVisualDatasetSubject | CarnaubaLeafletCardVisualDatasetSubject;
+  | CarnaubaHomeLeafletsLinkVisualDatasetSubject
+  | CarnaubaLeafletCardVisualDatasetSubject
+  | CarnaubaLeafletImageVisualDatasetSubject;
 
 export interface VisualDatasetSample {
   readonly sampleId: string;

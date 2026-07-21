@@ -32,6 +32,7 @@ export interface CarnaubaLeafletPage {
   discoverCards(): Promise<readonly CarnaubaLeafletCard[]>;
   getLeafletCardVisualTarget(cardIndex: number): Promise<CarnaubaLeafletVisualTarget>;
   openLeafletAt(cardIndex: number): Promise<OpenedCarnaubaLeaflet>;
+  getLeafletModalImageVisualTarget(imageIndex: number): Promise<CarnaubaLeafletVisualTarget>;
   closeLeafletModal(): Promise<void>;
   close(): Promise<void>;
 }
