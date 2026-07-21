@@ -1,7 +1,9 @@
 import { resolve } from 'node:path';
 import { readdir } from 'node:fs/promises';
+import type { Logger } from '../../application/ports/logger';
 import { VisualDatasetCaptureService } from '../../application/services/visual-dataset-capture-service';
 import { ConsoleLogger } from '../logging/console-logger';
+import { JsonLogger } from '../logging/json-logger';
 import { FileSystemVisualDatasetSampleRepository } from '../repositories/file-system-visual-dataset-sample-repository';
 import { CarnaubaLeafletExtractor } from '../scrapers/carnauba/carnauba-leaflet-extractor';
 import { CarnaubaPlaywrightExtractionService } from '../scrapers/carnauba/carnauba-playwright-extraction';
@@ -28,7 +30,7 @@ async function main(): Promise<void> {
 
 async function run(): Promise<void> {
   const options = parseCarnaubaPlaywrightCommandOptions(process.argv.slice(2), process.env);
-  const logger = new ConsoleLogger('info');
+  const logger = createLogger(process.env);
   const authTokenProvider = new PlaywrightMercadappAuthTokenProvider({
     bootstrapUrl: `${options.siteBaseUrl.replace(/\/+$/, '')}/loja/79/encartes`,
     timeoutMs: options.timeoutMs,
@@ -120,6 +122,14 @@ async function run(): Promise<void> {
 
 function createRunId(startedAtIso: string): string {
   return `carnauba-playwright-${startedAtIso.replace(/[:.]/g, '-')}`;
+}
+
+function createLogger(env: Readonly<Record<string, string | undefined>>): Logger {
+  if (env['LOG_FORMAT'] === 'json') {
+    return new JsonLogger('info');
+  }
+
+  return new ConsoleLogger('info');
 }
 
 async function countVisualDatasetAnnotations(
