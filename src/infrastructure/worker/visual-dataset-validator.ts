@@ -135,11 +135,7 @@ async function findAnnotationPaths(rootDirectory: string): Promise<readonly stri
 function parseAnnotation(annotationPath: string, content: string): PartialVisualDatasetAnnotation {
   try {
     return JSON.parse(content) as PartialVisualDatasetAnnotation;
-  } catch (error) {
-    if (error instanceof VisualDatasetValidationError) {
-      throw error;
-    }
-
+  } catch {
     throw new VisualDatasetValidationError(`Cannot parse annotation JSON: ${annotationPath}.`);
   }
 }

@@ -44,6 +44,15 @@ describe('JsonLogger', () => {
     );
   });
 
+  it('uses the system clock when no clock is provided', () => {
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(ignoreConsoleOutput);
+    const logger = new JsonLogger('info');
+
+    logger.info('Default clock.');
+
+    expect(infoSpy.mock.calls[0]?.[0]).toContain('Default clock.');
+  });
+
   it('skips entries below the configured level', () => {
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(ignoreConsoleOutput);
     const logger = new JsonLogger('warn', () => '2026-07-21T10:00:00.000Z');

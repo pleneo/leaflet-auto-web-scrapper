@@ -146,6 +146,46 @@ describe('createCarnaubaRunManifest', () => {
       errorMessage: 'Store unavailable.',
     });
   });
+
+  it('summarizes a failed run when every store fails', () => {
+    const manifest = createCarnaubaRunManifest({
+      runId: 'run-1',
+      startedAtIso: '2026-07-21T10:00:00.000Z',
+      completedAtIso: '2026-07-21T10:00:01.000Z',
+      outputDirectoryPath: '/tmp/output',
+      metadataPath: '/tmp/output/metadata.json',
+      result: {
+        ...createResult(),
+        stores: [],
+        failedStores: [
+          {
+            store: {
+              storeId: 65,
+              name: 'Aldeota',
+              cnpj: '',
+              corporateName: '',
+            },
+            sourceUrl: 'https://example.com/loja/65/encartes',
+            attempts: 2,
+            errorMessage: 'Store unavailable.',
+          },
+        ],
+      },
+      stored: {
+        ...createStoredExtraction(),
+        sharedLeaflets: [],
+      },
+      visualDataset: {
+        enabled: false,
+        rootDirectory: null,
+        samplesCreated: 0,
+      },
+    });
+
+    expect(manifest.status).toBe('failed');
+    expect(manifest.storesSucceeded).toBe(0);
+    expect(manifest.storesFailed).toBe(1);
+  });
 });
 
 describe('writeCarnaubaRunManifest', () => {
