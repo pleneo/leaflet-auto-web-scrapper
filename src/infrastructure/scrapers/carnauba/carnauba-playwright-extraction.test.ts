@@ -47,6 +47,45 @@ describe('CarnaubaPlaywrightExtractionService', () => {
     expect(result.stores[1]?.leaflets[0]?.leafletId).toBe('leaflet-70');
   });
 
+  it('passes visual dataset context to each store extraction', async () => {
+    const leafletExtractor = new FakeSingleStoreExtractor();
+    const service = new CarnaubaPlaywrightExtractionService(
+      new FakeStoreCatalogProvider(createStores()),
+      new FakeStoreSnapshotCache(null),
+      leafletExtractor,
+      new FixedClock('2026-07-20T15:59:00.000Z'),
+      new FakeLogger(),
+    );
+
+    await service.extract({
+      brandId: 27,
+      storeCacheTtlMs: 86_400_000,
+      siteBaseUrl: 'https://carnaubasupermercados.com.br',
+      viewport: createVisualViewport({ width: 1366, height: 768, deviceScaleFactor: 1 }),
+      timeoutMs: 30_000,
+      settleDelayMs: 5_000,
+      visualDataset: {
+        runId: 'run-1',
+        split: 'unassigned',
+      },
+    });
+
+    expect(leafletExtractor.receivedInputs.map((input) => input.visualDataset)).toEqual([
+      {
+        runId: 'run-1',
+        storeId: 79,
+        storeName: 'Maestro',
+        split: 'unassigned',
+      },
+      {
+        runId: 'run-1',
+        storeId: 70,
+        storeName: 'Messejana',
+        split: 'unassigned',
+      },
+    ]);
+  });
+
   it('uses a fresh cached store snapshot', async () => {
     const storeCatalogProvider = new FakeStoreCatalogProvider([]);
     const storeSnapshotCache = new FakeStoreSnapshotCache({
@@ -244,7 +283,9 @@ class FailingStoreCatalogProvider implements CarnaubaStoreCatalogProvider {
 class FakeSingleStoreExtractor implements SingleStoreCarnaubaLeafletExtractor {
   readonly sourceUrls: string[] = [];
 
-  extract(input: { readonly sourceUrl: string }): Promise<{
+  readonly receivedInputs: Parameters<SingleStoreCarnaubaLeafletExtractor['extract']>[0][] = [];
+
+  extract(input: Parameters<SingleStoreCarnaubaLeafletExtractor['extract']>[0]): Promise<{
     readonly leaflets: readonly [
       {
         readonly leafletId: string;
@@ -255,6 +296,7 @@ class FakeSingleStoreExtractor implements SingleStoreCarnaubaLeafletExtractor {
       },
     ];
   }> {
+    this.receivedInputs.push(input);
     this.sourceUrls.push(input.sourceUrl);
     const storeId = input.sourceUrl.includes('/79/') ? '79' : '70';
 

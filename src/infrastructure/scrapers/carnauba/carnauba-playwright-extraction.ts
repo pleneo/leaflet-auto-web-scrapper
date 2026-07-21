@@ -2,6 +2,7 @@ import type { ExtractCarnaubaLeafletsInput } from './carnauba-leaflet-extractor'
 import type { Clock } from '../../../application/ports/clock';
 import type { Logger } from '../../../application/ports/logger';
 import type { ExtractedLeaflet } from '../../../domain/leaflet/extracted-leaflet';
+import type { DatasetSplit } from '../../../domain/dataset/dataset-split';
 import type { VisualViewport } from '../../../domain/visual/viewport';
 import type {
   CarnaubaStore,
@@ -29,6 +30,12 @@ export interface CarnaubaPlaywrightExtractionInput {
   readonly viewport: VisualViewport;
   readonly timeoutMs: number;
   readonly settleDelayMs: number;
+  readonly visualDataset?: CarnaubaPlaywrightVisualDatasetInput;
+}
+
+export interface CarnaubaPlaywrightVisualDatasetInput {
+  readonly runId: string;
+  readonly split: DatasetSplit;
 }
 
 export interface SingleStoreCarnaubaLeafletExtractor {
@@ -90,12 +97,9 @@ export class CarnaubaPlaywrightExtractionService {
         sourceUrl,
       });
 
-      const result = await this.leafletExtractor.extract({
-        sourceUrl,
-        viewport: input.viewport,
-        timeoutMs: input.timeoutMs,
-        settleDelayMs: input.settleDelayMs,
-      });
+      const result = await this.leafletExtractor.extract(
+        createStoreExtractionInput(input, store, sourceUrl),
+      );
 
       this.logger.info('Finished Carnauba Playwright store extraction.', {
         storeId: store.storeId,
@@ -164,6 +168,33 @@ export class CarnaubaPlaywrightExtractionService {
       throw error;
     }
   }
+}
+
+function createStoreExtractionInput(
+  input: CarnaubaPlaywrightExtractionInput,
+  store: CarnaubaStore,
+  sourceUrl: string,
+): ExtractCarnaubaLeafletsInput {
+  const baseInput = {
+    sourceUrl,
+    viewport: input.viewport,
+    timeoutMs: input.timeoutMs,
+    settleDelayMs: input.settleDelayMs,
+  };
+
+  if (input.visualDataset === undefined) {
+    return baseInput;
+  }
+
+  return {
+    ...baseInput,
+    visualDataset: {
+      runId: input.visualDataset.runId,
+      storeId: store.storeId,
+      storeName: store.name,
+      split: input.visualDataset.split,
+    },
+  };
 }
 
 function validateInput(input: CarnaubaPlaywrightExtractionInput): void {
