@@ -12,12 +12,23 @@ export interface VisualTargetAnnotation {
   readonly normalizedDocumentBox: NormalizedBoundingBox;
 }
 
+export interface CarnaubaLeafletCardVisualDatasetSubject {
+  readonly subjectKind: 'carnauba-leaflet-card';
+  readonly storeId: number;
+  readonly storeName: string;
+  readonly cardIndex: number;
+  readonly leafletTitle: string;
+}
+
+export type VisualDatasetSubject = CarnaubaLeafletCardVisualDatasetSubject;
+
 export interface VisualDatasetSample {
   readonly sampleId: string;
   readonly runId: string;
   readonly supermarketId: SupermarketId;
   readonly stateName: FsmStateName;
   readonly pageUrl: string;
+  readonly subject: VisualDatasetSubject;
   readonly screenshotPng: Uint8Array;
   readonly screenshotMetadata: ScreenshotMetadata;
   readonly target: VisualTargetAnnotation;
