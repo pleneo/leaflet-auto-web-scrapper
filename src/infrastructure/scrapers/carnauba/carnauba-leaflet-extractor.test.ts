@@ -47,6 +47,7 @@ describe('CarnaubaLeafletExtractor', () => {
     const extractor = createExtractor(page);
 
     const result = await extractor.extract({
+      homeUrl: 'https://carnaubasupermercados.com.br/loja/79',
       sourceUrl: 'https://carnaubasupermercados.com.br/loja/79/encartes',
       viewport: createVisualViewport({
         width: 1366,
@@ -56,8 +57,11 @@ describe('CarnaubaLeafletExtractor', () => {
       settleDelayMs: 5_000,
     });
 
-    expect(page.gotoUrls).toEqual(['https://carnaubasupermercados.com.br/loja/79/encartes']);
-    expect(page.waitCalls).toEqual([5_000]);
+    expect(page.gotoUrls).toEqual(['https://carnaubasupermercados.com.br/loja/79']);
+    expect(page.openedLeafletsPageUrls).toEqual([
+      'https://carnaubasupermercados.com.br/loja/79/encartes',
+    ]);
+    expect(page.waitCalls).toEqual([5_000, 5_000]);
     expect(page.openedIndexes).toEqual([0, 1]);
     expect(page.closeModalCalls).toBe(2);
     expect(page.closed).toBe(true);
@@ -111,6 +115,7 @@ describe('CarnaubaLeafletExtractor', () => {
     });
 
     const result = await createExtractor(page).extract({
+      homeUrl: 'https://carnaubasupermercados.com.br/loja/79',
       sourceUrl: 'https://carnaubasupermercados.com.br/loja/79/encartes',
       viewport: createVisualViewport({
         width: 1366,
@@ -143,6 +148,7 @@ describe('CarnaubaLeafletExtractor', () => {
     const extractor = createExtractor(page, visualDatasetCaptureService);
 
     await extractor.extract({
+      homeUrl: 'https://carnaubasupermercados.com.br/loja/79',
       sourceUrl: 'https://carnaubasupermercados.com.br/loja/79/encartes',
       viewport: createVisualViewport({
         width: 1366,
@@ -158,9 +164,22 @@ describe('CarnaubaLeafletExtractor', () => {
       },
     });
 
-    expect(page.events).toEqual(['capture-0', 'open-0']);
-    expect(visualDatasetCaptureService.inputs).toHaveLength(1);
+    expect(page.events).toEqual(['capture-home', 'open-leaflets-page', 'capture-0', 'open-0']);
+    expect(visualDatasetCaptureService.inputs).toHaveLength(2);
     expect(visualDatasetCaptureService.inputs[0]).toMatchObject({
+      sampleId: 'run-1-store-79-open-leaflets-page',
+      runId: 'run-1',
+      supermarketId: 'carnauba',
+      stateName: 'ANCHOR_PAGE',
+      label: 'open_leaflets_page_button',
+      subject: {
+        subjectKind: 'carnauba-home-leaflets-link',
+        storeId: 79,
+        storeName: 'Maestro',
+      },
+      split: 'unassigned',
+    });
+    expect(visualDatasetCaptureService.inputs[1]).toMatchObject({
       sampleId: 'run-1-store-79-card-1-sao-joao',
       runId: 'run-1',
       supermarketId: 'carnauba',
@@ -195,6 +214,7 @@ describe('CarnaubaLeafletExtractor', () => {
 
     await expect(
       createExtractor(page).extract({
+        homeUrl: 'https://carnaubasupermercados.com.br/loja/79',
         sourceUrl: 'https://carnaubasupermercados.com.br/loja/79/encartes',
         viewport: createVisualViewport({
           width: 1366,
@@ -218,6 +238,7 @@ describe('CarnaubaLeafletExtractor', () => {
 
     await expect(
       extractor.extract({
+        homeUrl: 'invalid-url',
         sourceUrl: 'invalid-url',
         viewport,
         timeoutMs: 30_000,
@@ -227,6 +248,7 @@ describe('CarnaubaLeafletExtractor', () => {
 
     await expect(
       extractor.extract({
+        homeUrl: 'https://example.com',
         sourceUrl: 'https://example.com',
         viewport,
         timeoutMs: 0,
@@ -236,6 +258,7 @@ describe('CarnaubaLeafletExtractor', () => {
 
     await expect(
       extractor.extract({
+        homeUrl: 'https://example.com',
         sourceUrl: 'https://example.com',
         viewport,
         timeoutMs: 30_000,
@@ -287,6 +310,8 @@ class FakeCarnaubaLeafletPage implements CarnaubaLeafletPage {
 
   readonly waitCalls: number[] = [];
 
+  readonly openedLeafletsPageUrls: string[] = [];
+
   readonly openedIndexes: number[] = [];
 
   closeModalCalls = 0;
@@ -314,6 +339,19 @@ class FakeCarnaubaLeafletPage implements CarnaubaLeafletPage {
 
   discoverCards(): Promise<readonly CarnaubaLeafletCard[]> {
     return Promise.resolve(this.cards);
+  }
+
+  getLeafletsPageVisualTarget(): Promise<CarnaubaLeafletVisualTarget> {
+    return Promise.resolve({
+      page: new FakeVisualDatasetPage(),
+      target: new FakeVisualActionTarget('home'),
+    });
+  }
+
+  openLeafletsPage(expectedUrl: string): Promise<void> {
+    this.events.push('open-leaflets-page');
+    this.openedLeafletsPageUrls.push(expectedUrl);
+    return Promise.resolve();
   }
 
   getLeafletCardVisualTarget(cardIndex: number): Promise<CarnaubaLeafletVisualTarget> {
@@ -355,8 +393,8 @@ class FakeVisualDatasetPage implements VisualDatasetPage {
 class FakeVisualActionTarget implements VisualActionTarget {
   readonly locatorDescription: string;
 
-  constructor(cardIndex: number) {
-    this.locatorDescription = `card-${String(cardIndex)}`;
+  constructor(target: number | 'home') {
+    this.locatorDescription = target === 'home' ? 'home-leaflets' : `card-${String(target)}`;
   }
 
   scrollIntoView(): never {
@@ -386,9 +424,18 @@ class FakeVisualDatasetCaptureService {
   }
 
   captureBeforeAction(input: CaptureVisualDatasetSampleInput): Promise<never> {
-    this.events.push(`capture-${String(input.subject.cardIndex)}`);
+    this.events.push(createCaptureEventName(input.subject));
     this.inputs.push(input);
     return Promise.resolve(undefined as never);
+  }
+}
+
+function createCaptureEventName(subject: CaptureVisualDatasetSampleInput['subject']): string {
+  switch (subject.subjectKind) {
+    case 'carnauba-home-leaflets-link':
+      return 'capture-home';
+    case 'carnauba-leaflet-card':
+      return `capture-${String(subject.cardIndex)}`;
   }
 }
 

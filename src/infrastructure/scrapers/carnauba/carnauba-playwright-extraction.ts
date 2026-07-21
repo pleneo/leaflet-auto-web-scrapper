@@ -91,14 +91,16 @@ export class CarnaubaPlaywrightExtractionService {
     const extractedStores: CarnaubaPlaywrightExtractedStore[] = [];
 
     for (const store of stores) {
+      const homeUrl = buildStoreHomeUrl(input.siteBaseUrl, store.storeId);
       const sourceUrl = buildStoreLeafletsUrl(input.siteBaseUrl, store.storeId);
       this.logger.info('Starting Carnauba Playwright store extraction.', {
         storeId: store.storeId,
+        homeUrl,
         sourceUrl,
       });
 
       const result = await this.leafletExtractor.extract(
-        createStoreExtractionInput(input, store, sourceUrl),
+        createStoreExtractionInput(input, store, homeUrl, sourceUrl),
       );
 
       this.logger.info('Finished Carnauba Playwright store extraction.', {
@@ -173,9 +175,11 @@ export class CarnaubaPlaywrightExtractionService {
 function createStoreExtractionInput(
   input: CarnaubaPlaywrightExtractionInput,
   store: CarnaubaStore,
+  homeUrl: string,
   sourceUrl: string,
 ): ExtractCarnaubaLeafletsInput {
   const baseInput = {
+    homeUrl,
     sourceUrl,
     viewport: input.viewport,
     timeoutMs: input.timeoutMs,
@@ -235,6 +239,19 @@ export function buildStoreLeafletsUrl(siteBaseUrl: string, storeId: number): str
 
   const baseUrl = new URL(siteBaseUrl);
   baseUrl.pathname = `/loja/${String(storeId)}/encartes`;
+  baseUrl.search = '';
+  baseUrl.hash = '';
+
+  return baseUrl.toString();
+}
+
+export function buildStoreHomeUrl(siteBaseUrl: string, storeId: number): string {
+  if (!Number.isInteger(storeId) || storeId <= 0) {
+    throw new CarnaubaPlaywrightExtractionError('storeId must be a positive integer.');
+  }
+
+  const baseUrl = new URL(siteBaseUrl);
+  baseUrl.pathname = `/loja/${String(storeId)}`;
   baseUrl.search = '';
   baseUrl.hash = '';
 

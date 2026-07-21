@@ -28,6 +28,7 @@ async function run(): Promise<void> {
   const storage = new LocalLeafletImageStorage(new FetchLeafletImageHttpClient());
 
   const result = await extractor.extract({
+    homeUrl: createCarnaubaStoreHomeUrl(options.url),
     sourceUrl: options.url,
     viewport: options.viewport,
     timeoutMs: options.timeoutMs,
@@ -49,6 +50,15 @@ async function run(): Promise<void> {
       images: leaflet.images.length,
     });
   }
+}
+
+function createCarnaubaStoreHomeUrl(leafletsUrl: string): string {
+  const url = new URL(leafletsUrl);
+  url.pathname = url.pathname.replace(/\/encartes\/?$/, '');
+  url.search = '';
+  url.hash = '';
+
+  return url.toString();
 }
 
 void main();

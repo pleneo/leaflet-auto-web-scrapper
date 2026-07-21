@@ -27,8 +27,7 @@ export interface CarnaubaHomeLeafletsLinkVisualDatasetSubject {
 }
 
 export type VisualDatasetSubject =
-  | CarnaubaHomeLeafletsLinkVisualDatasetSubject
-  | CarnaubaLeafletCardVisualDatasetSubject;
+  CarnaubaHomeLeafletsLinkVisualDatasetSubject | CarnaubaLeafletCardVisualDatasetSubject;
 
 export interface VisualDatasetSample {
   readonly sampleId: string;

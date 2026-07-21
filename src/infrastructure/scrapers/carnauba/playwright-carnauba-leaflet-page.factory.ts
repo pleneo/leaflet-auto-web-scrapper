@@ -85,6 +85,29 @@ class PlaywrightCarnaubaLeafletPage implements CarnaubaLeafletPage {
     return cards;
   }
 
+  getLeafletsPageVisualTarget(): Promise<CarnaubaLeafletVisualTarget> {
+    return Promise.resolve({
+      page: new PlaywrightVisualDatasetPage(this.page),
+      target: new PlaywrightVisualActionTarget(
+        this.leafletsPageButtonLocator(),
+        'Carnauba home leaflets button',
+        this.timeoutMs,
+      ),
+    });
+  }
+
+  async openLeafletsPage(expectedUrl: string): Promise<void> {
+    await Promise.all([
+      this.page.waitForURL(expectedUrl, {
+        timeout: this.timeoutMs,
+        waitUntil: 'domcontentloaded',
+      }),
+      this.leafletsPageButtonLocator().click({
+        timeout: this.timeoutMs,
+      }),
+    ]);
+  }
+
   getLeafletCardVisualTarget(cardIndex: number): Promise<CarnaubaLeafletVisualTarget> {
     return Promise.resolve({
       page: new PlaywrightVisualDatasetPage(this.page),
@@ -138,6 +161,15 @@ class PlaywrightCarnaubaLeafletPage implements CarnaubaLeafletPage {
     return this.page.locator('.flip-card.card').filter({
       has: this.page.locator('img[src*="flipbooks"]'),
     });
+  }
+
+  private leafletsPageButtonLocator(): Locator {
+    return this.page
+      .locator('button:visible, [role="button"]:visible, a:visible')
+      .filter({
+        hasText: /^\s*Encartes\s*$/,
+      })
+      .first();
   }
 
   private modalLocator(): Locator {
