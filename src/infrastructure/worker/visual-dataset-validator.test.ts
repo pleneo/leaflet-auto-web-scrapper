@@ -83,6 +83,105 @@ describe('validateVisualDataset', () => {
     ]);
   });
 
+  it('reports missing screenshot, target and boxes', async () => {
+    const sampleDirectory = await createSampleDirectory('sample-1');
+    await writeAnnotation(sampleDirectory, {
+      sampleId: '',
+      runId: '',
+      supermarketId: '',
+      stateName: 'LEAFLETS_PAGE',
+      pageUrl: '',
+      screenshotPath: '',
+      target: {
+        label: 'open_leaflet_modal_button',
+      },
+    });
+
+    const report = await validateVisualDataset(rootDirectory);
+
+    expect(report.valid).toBe(false);
+    expect(report.issues.map((issue) => issue.message)).toEqual([
+      'sampleId is missing or blank.',
+      'runId is missing or blank.',
+      'supermarketId is missing or blank.',
+      'pageUrl is missing or blank.',
+      'screenshotPath is missing or blank.',
+      'target.viewportBox is missing or invalid.',
+      'target.documentBox is missing or invalid.',
+      'target.normalizedDocumentBox is missing or invalid.',
+    ]);
+  });
+
+  it('reports non-numeric box values', async () => {
+    const sampleDirectory = await createSampleDirectory('sample-1');
+    const screenshotPath = join(sampleDirectory, 'sample-1.png');
+    await writeFile(screenshotPath, Uint8Array.of(1, 2, 3));
+    await writeAnnotation(
+      sampleDirectory,
+      createAnnotation(screenshotPath, {
+        target: {
+          label: 'open_leaflet_modal_button',
+          viewportBox: {
+            xMin: '10',
+            yMin: 20,
+            xMax: 110,
+            yMax: 220,
+            width: 100,
+            height: 200,
+          },
+          documentBox: {
+            xMin: 10,
+            yMin: 20,
+            xMax: 110,
+            yMax: 220,
+            width: 100,
+            height: 200,
+          },
+          normalizedDocumentBox: {
+            xCenter: 0.5,
+            yCenter: 0.5,
+            width: 0.25,
+            height: 0.25,
+          },
+        },
+      }),
+    );
+
+    const report = await validateVisualDataset(rootDirectory);
+
+    expect(report.valid).toBe(false);
+    expect(report.issues.map((issue) => issue.message)).toEqual([
+      'target.viewportBox has invalid dimensions.',
+    ]);
+  });
+
+  it('reports a missing target', async () => {
+    const sampleDirectory = await createSampleDirectory('sample-1');
+    const screenshotPath = join(sampleDirectory, 'sample-1.png');
+    await writeFile(screenshotPath, Uint8Array.of(1, 2, 3));
+    await writeAnnotation(sampleDirectory, {
+      sampleId: 'sample-1',
+      runId: 'run-1',
+      supermarketId: 'carnauba',
+      stateName: 'LEAFLETS_PAGE',
+      pageUrl: 'https://example.com',
+      screenshotPath,
+    });
+
+    const report = await validateVisualDataset(rootDirectory);
+
+    expect(report.issues.map((issue) => issue.message)).toEqual(['target is missing or invalid.']);
+  });
+
+  it('rejects invalid annotation JSON', async () => {
+    const sampleDirectory = await createSampleDirectory('sample-1');
+    await writeFile(join(sampleDirectory, 'annotation.json'), '{');
+
+    await expect(validateVisualDataset(rootDirectory)).rejects.toThrow(
+      VisualDatasetValidationError,
+    );
+  });
+
   it('rejects blank roots and unreadable directories', async () => {
     await expect(validateVisualDataset(' ')).rejects.toThrow(VisualDatasetValidationError);
     await expect(validateVisualDataset(join(rootDirectory, 'missing'))).rejects.toThrow(

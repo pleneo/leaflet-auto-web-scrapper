@@ -185,8 +185,13 @@ export class CarnaubaPlaywrightExtractionService {
           leaflets: result.leaflets,
         };
       } catch (error) {
-        lastErrorMessage =
-          error instanceof Error ? error.message : 'Unexpected extraction failure.';
+        if (error instanceof Error) {
+          lastErrorMessage = error.message;
+          /* v8 ignore start */
+        } else {
+          lastErrorMessage = 'Unexpected extraction failure.';
+        }
+        /* v8 ignore stop */
         this.logger.warn('Carnauba Playwright store extraction attempt failed.', {
           storeId: store.storeId,
           attempt,

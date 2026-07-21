@@ -200,6 +200,32 @@ describe('CarnaubaPlaywrightExtractionService', () => {
     expect(result.failedStores).toEqual([]);
   });
 
+  it('fails a store when the store timeout is reached', async () => {
+    const service = new CarnaubaPlaywrightExtractionService(
+      new FakeStoreCatalogProvider(createStores().slice(0, 1)),
+      new FakeStoreSnapshotCache(null),
+      new FakeSingleStoreExtractor({
+        hangingStoreIds: [79],
+      }),
+      new FixedClock('2026-07-20T15:59:00.000Z'),
+      new FakeLogger(),
+    );
+
+    const result = await service.extract({
+      brandId: 27,
+      storeCacheTtlMs: 86_400_000,
+      siteBaseUrl: 'https://carnaubasupermercados.com.br',
+      viewport: createVisualViewport({ width: 1366, height: 768, deviceScaleFactor: 1 }),
+      timeoutMs: 30_000,
+      storeTimeoutMs: 1,
+      maxStoreAttempts: 1,
+      settleDelayMs: 5_000,
+    });
+
+    expect(result.stores).toEqual([]);
+    expect(result.failedStores[0]?.errorMessage).toBe('Carnauba store 79 extraction timed out.');
+  });
+
   it('rejects invalid input and store URLs', async () => {
     const service = new CarnaubaPlaywrightExtractionService(
       new FakeStoreCatalogProvider([]),
@@ -387,6 +413,7 @@ class FailingStoreCatalogProvider implements CarnaubaStoreCatalogProvider {
 
 interface FakeSingleStoreExtractorConfig {
   readonly failingStoreIds?: readonly number[];
+  readonly hangingStoreIds?: readonly number[];
   readonly transientFailuresByStoreId?: readonly {
     readonly storeId: number;
     readonly failures: number;
@@ -402,10 +429,13 @@ class FakeSingleStoreExtractor implements SingleStoreCarnaubaLeafletExtractor {
 
   private readonly failingStoreIds: readonly number[];
 
+  private readonly hangingStoreIds: readonly number[];
+
   private readonly remainingTransientFailures = new Map<number, number>();
 
   constructor(config: FakeSingleStoreExtractorConfig = {}) {
     this.failingStoreIds = config.failingStoreIds ?? [];
+    this.hangingStoreIds = config.hangingStoreIds ?? [];
 
     for (const transientFailure of config.transientFailuresByStoreId ?? []) {
       this.remainingTransientFailures.set(transientFailure.storeId, transientFailure.failures);
@@ -430,6 +460,10 @@ class FakeSingleStoreExtractor implements SingleStoreCarnaubaLeafletExtractor {
 
     if (this.failingStoreIds.includes(storeId)) {
       return Promise.reject(new Error(`Store ${String(storeId)} unavailable.`));
+    }
+
+    if (this.hangingStoreIds.includes(storeId)) {
+      return new Promise(() => undefined);
     }
 
     const remainingTransientFailures = this.remainingTransientFailures.get(storeId) ?? 0;
