@@ -102,21 +102,16 @@ export class CarnaubaLeafletExtractor {
           );
         }
 
-        const firstImageUrl = imageUrls[0];
-
-        if (firstImageUrl === undefined) {
-          throw new CarnaubaLeafletExtractionError(
-            `Leaflet card ${String(cardIndex)} did not expose a first modal image URL.`,
+        for (const [imageIndex, imageUrl] of imageUrls.entries()) {
+          await this.captureModalImageVisualDatasetSampleIfEnabled(
+            page,
+            input,
+            cardIndex,
+            title,
+            imageIndex,
+            imageUrl,
           );
         }
-
-        await this.captureModalImageVisualDatasetSampleIfEnabled(
-          page,
-          input,
-          cardIndex,
-          title,
-          firstImageUrl,
-        );
 
         leaflets.push(createExtractedLeaflet(card, title, cardIndex, imageUrls));
         await page.closeLeafletModal();
@@ -204,13 +199,14 @@ export class CarnaubaLeafletExtractor {
     input: ExtractCarnaubaLeafletsInput,
     cardIndex: number,
     leafletTitle: string,
+    imageIndex: number,
     imageUrl: string,
   ): Promise<void> {
     if (input.visualDataset === undefined || this.visualDatasetCaptureService === undefined) {
       return;
     }
 
-    const visualTarget = await page.getLeafletModalImageVisualTarget();
+    const visualTarget = await page.getLeafletModalImageVisualTarget(imageIndex);
 
     await this.visualDatasetCaptureService.captureBeforeAction({
       sampleId: createModalImageVisualDatasetSampleId(
@@ -218,7 +214,7 @@ export class CarnaubaLeafletExtractor {
         input.visualDataset.storeId,
         leafletTitle,
         cardIndex,
-        0,
+        imageIndex,
       ),
       runId: input.visualDataset.runId,
       supermarketId: 'carnauba',
@@ -230,7 +226,7 @@ export class CarnaubaLeafletExtractor {
         storeName: input.visualDataset.storeName,
         cardIndex,
         leafletTitle,
-        imageIndex: 0,
+        imageIndex,
         imageUrl,
       },
       split: input.visualDataset.split,

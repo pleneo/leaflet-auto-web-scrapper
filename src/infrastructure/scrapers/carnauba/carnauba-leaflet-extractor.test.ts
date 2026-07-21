@@ -140,7 +140,7 @@ describe('CarnaubaLeafletExtractor', () => {
       openedLeaflets: [
         {
           title: 'São João',
-          imageUrls: ['https://cdn.example.com/page.png'],
+          imageUrls: ['https://cdn.example.com/page-1.png', 'https://cdn.example.com/page-2.png'],
         },
       ],
     });
@@ -170,8 +170,9 @@ describe('CarnaubaLeafletExtractor', () => {
       'capture-card-0',
       'open-0',
       'capture-image-0-0',
+      'capture-image-0-1',
     ]);
-    expect(visualDatasetCaptureService.inputs).toHaveLength(3);
+    expect(visualDatasetCaptureService.inputs).toHaveLength(4);
     expect(visualDatasetCaptureService.inputs[0]).toMatchObject({
       sampleId: 'run-1-store-79-open-leaflets-page',
       runId: 'run-1',
@@ -213,7 +214,24 @@ describe('CarnaubaLeafletExtractor', () => {
         cardIndex: 0,
         leafletTitle: 'São João',
         imageIndex: 0,
-        imageUrl: 'https://cdn.example.com/page.png',
+        imageUrl: 'https://cdn.example.com/page-1.png',
+      },
+      split: 'unassigned',
+    });
+    expect(visualDatasetCaptureService.inputs[3]).toMatchObject({
+      sampleId: 'run-1-store-79-card-1-sao-joao-image-2',
+      runId: 'run-1',
+      supermarketId: 'carnauba',
+      stateName: 'LEAFLET_MODAL',
+      label: 'extract_leaflet_image',
+      subject: {
+        subjectKind: 'carnauba-leaflet-image',
+        storeId: 79,
+        storeName: 'Maestro',
+        cardIndex: 0,
+        leafletTitle: 'São João',
+        imageIndex: 1,
+        imageUrl: 'https://cdn.example.com/page-2.png',
       },
       split: 'unassigned',
     });
@@ -396,10 +414,13 @@ class FakeCarnaubaLeafletPage implements CarnaubaLeafletPage {
     return Promise.resolve(openedLeaflet);
   }
 
-  getLeafletModalImageVisualTarget(): Promise<CarnaubaLeafletVisualTarget> {
+  getLeafletModalImageVisualTarget(imageIndex: number): Promise<CarnaubaLeafletVisualTarget> {
     return Promise.resolve({
       page: new FakeVisualDatasetPage(),
-      target: new FakeVisualActionTarget('modal-image'),
+      target: new FakeVisualActionTarget({
+        targetKind: 'modal-image',
+        imageIndex,
+      }),
     });
   }
 
@@ -423,14 +444,22 @@ class FakeVisualDatasetPage implements VisualDatasetPage {
 class FakeVisualActionTarget implements VisualActionTarget {
   readonly locatorDescription: string;
 
-  constructor(target: number | 'home' | 'modal-image') {
+  constructor(
+    target:
+      | number
+      | 'home'
+      | {
+          readonly targetKind: 'modal-image';
+          readonly imageIndex: number;
+        },
+  ) {
     if (target === 'home') {
       this.locatorDescription = 'home-leaflets';
       return;
     }
 
-    if (target === 'modal-image') {
-      this.locatorDescription = 'modal-image';
+    if (typeof target === 'object') {
+      this.locatorDescription = `modal-image-${String(target.imageIndex)}`;
       return;
     }
 

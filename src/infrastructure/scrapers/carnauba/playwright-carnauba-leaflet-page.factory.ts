@@ -141,12 +141,12 @@ class PlaywrightCarnaubaLeafletPage implements CarnaubaLeafletPage {
     };
   }
 
-  getLeafletModalImageVisualTarget(): Promise<CarnaubaLeafletVisualTarget> {
+  getLeafletModalImageVisualTarget(imageIndex: number): Promise<CarnaubaLeafletVisualTarget> {
     return Promise.resolve({
       page: new PlaywrightVisualDatasetPage(this.page),
       target: new PlaywrightVisualActionTarget(
-        this.modalImageLocator(),
-        'Carnauba leaflet modal visible image',
+        this.modalImageLocator(imageIndex),
+        `Carnauba leaflet modal visible image ${String(imageIndex + 1)}`,
         this.timeoutMs,
       ),
     });
@@ -187,8 +187,8 @@ class PlaywrightCarnaubaLeafletPage implements CarnaubaLeafletPage {
     return this.page.locator('.modal.show[role="dialog"]').first();
   }
 
-  private modalImageLocator(): Locator {
-    return this.modalLocator().locator('img:visible').first();
+  private modalImageLocator(imageIndex: number): Locator {
+    return this.modalLocator().locator('[style*="background-image"]:visible').nth(imageIndex);
   }
 }
 
