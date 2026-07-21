@@ -16,4 +16,6 @@ COPY vite.config.ts vitest.config.ts index.html ./
 COPY public ./public
 COPY src ./src
 
+RUN npm run build
+
 CMD ["npm", "run", "worker:carnauba"]
