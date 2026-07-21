@@ -40,9 +40,7 @@ export class VisualDatasetCaptureService {
     this.clock = clock;
   }
 
-  async captureBeforeAction(
-    input: CaptureVisualDatasetSampleInput,
-  ): Promise<VisualDatasetSample> {
+  async captureBeforeAction(input: CaptureVisualDatasetSampleInput): Promise<VisualDatasetSample> {
     validateIdentity(input.sampleId, 'sampleId');
     validateIdentity(input.runId, 'runId');
 

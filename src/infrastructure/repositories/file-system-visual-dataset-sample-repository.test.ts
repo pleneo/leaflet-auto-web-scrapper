@@ -29,12 +29,11 @@ describe('FileSystemVisualDatasetSampleRepository', () => {
 
     await repository.saveMany([sample]);
 
-    const sampleDirectory = join(
-      rootDirectory,
-      'carnauba/2026-07-21/run-1/samples/sample-1',
-    );
+    const sampleDirectory = join(rootDirectory, 'carnauba/2026-07-21/run-1/samples/sample-1');
     const screenshotPath = join(sampleDirectory, 'sample-1.png');
-    const annotation = JSON.parse(await readFile(join(sampleDirectory, 'annotation.json'), 'utf8')) as {
+    const annotation = JSON.parse(
+      await readFile(join(sampleDirectory, 'annotation.json'), 'utf8'),
+    ) as {
       readonly sampleId: string;
       readonly screenshotPath: string;
       readonly subject: { readonly subjectKind: string; readonly storeId: number };
