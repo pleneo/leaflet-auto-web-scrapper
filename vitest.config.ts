@@ -30,6 +30,7 @@ export default defineConfig({
         'src/infrastructure/storage/fetch-leaflet-image-http-client.ts',
         'src/infrastructure/worker/carnauba-api-extract-command.ts',
         'src/infrastructure/worker/carnauba-leaflets-smoke-command.ts',
+        'src/infrastructure/worker/carnauba-playwright-command.ts',
         'src/infrastructure/worker/visual-capture-smoke-command.ts',
         'src/main.tsx',
         'src/worker-main.ts',
