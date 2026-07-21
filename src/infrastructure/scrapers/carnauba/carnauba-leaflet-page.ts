@@ -1,4 +1,8 @@
 import type { VisualViewport } from '../../../domain/visual/viewport';
+import type {
+  VisualActionTarget,
+  VisualDatasetPage,
+} from '../../../application/ports/visual-dataset-page';
 
 export interface OpenCarnaubaLeafletPageInput {
   readonly viewport: VisualViewport;
@@ -15,10 +19,16 @@ export interface OpenedCarnaubaLeaflet {
   readonly imageUrls: readonly string[];
 }
 
+export interface CarnaubaLeafletVisualTarget {
+  readonly page: VisualDatasetPage;
+  readonly target: VisualActionTarget;
+}
+
 export interface CarnaubaLeafletPage {
   goto(url: string): Promise<void>;
   waitForTimeout(timeoutMs: number): Promise<void>;
   discoverCards(): Promise<readonly CarnaubaLeafletCard[]>;
+  getLeafletCardVisualTarget(cardIndex: number): Promise<CarnaubaLeafletVisualTarget>;
   openLeafletAt(cardIndex: number): Promise<OpenedCarnaubaLeaflet>;
   closeLeafletModal(): Promise<void>;
   close(): Promise<void>;
