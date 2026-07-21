@@ -273,6 +273,13 @@ function createStrategyOutput(): StrategyExtractionOutput {
         supermarketId: 'carnauba',
         stateName: 'ANCHOR_PAGE',
         pageUrl: 'https://example.com/carnauba',
+        subject: {
+          subjectKind: 'carnauba-leaflet-card',
+          storeId: 79,
+          storeName: 'Maestro',
+          cardIndex: 0,
+          leafletTitle: 'Leaflet 1',
+        },
         screenshotPng: new Uint8Array([1, 2, 3]),
         screenshotMetadata: {
           fileName: 'sample-1.png',
