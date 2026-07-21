@@ -71,6 +71,8 @@ async function run(): Promise<void> {
     siteBaseUrl: options.siteBaseUrl,
     viewport: options.viewport,
     timeoutMs: options.timeoutMs,
+    storeTimeoutMs: options.storeTimeoutMs,
+    maxStoreAttempts: options.maxStoreAttempts,
     settleDelayMs: options.settleDelayMs,
   };
   const result = await service.extract(

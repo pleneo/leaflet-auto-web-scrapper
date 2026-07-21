@@ -19,6 +19,8 @@ describe('parseCarnaubaPlaywrightCommandOptions', () => {
         deviceScaleFactor: 1,
       },
       timeoutMs: 30_000,
+      storeTimeoutMs: 120_000,
+      maxStoreAttempts: 2,
       settleDelayMs: 5_000,
       visualDatasetEnabled: true,
       visualDatasetRootDirectory: '.data/visual-dataset',
@@ -38,6 +40,8 @@ describe('parseCarnaubaPlaywrightCommandOptions', () => {
           '390',
           '--visual-dataset-enabled',
           'false',
+          '--max-store-attempts',
+          '3',
           '--visual-dataset-split',
           'train',
         ],
@@ -50,6 +54,7 @@ describe('parseCarnaubaPlaywrightCommandOptions', () => {
           CARNAUBA_PLAYWRIGHT_HEIGHT: '844',
           CARNAUBA_PLAYWRIGHT_DEVICE_SCALE_FACTOR: '3',
           CARNAUBA_PLAYWRIGHT_TIMEOUT_MS: '5000',
+          CARNAUBA_PLAYWRIGHT_STORE_TIMEOUT_MS: '60000',
           CARNAUBA_PLAYWRIGHT_SETTLE_DELAY_MS: '1000',
           CARNAUBA_VISUAL_DATASET_DIR: '.data/env-visual-dataset',
           CARNAUBA_VISUAL_DATASET_SPLIT: 'validation',
@@ -68,6 +73,8 @@ describe('parseCarnaubaPlaywrightCommandOptions', () => {
         deviceScaleFactor: 3,
       },
       timeoutMs: 5_000,
+      storeTimeoutMs: 60_000,
+      maxStoreAttempts: 3,
       settleDelayMs: 1_000,
       visualDatasetEnabled: false,
       visualDatasetRootDirectory: '.data/env-visual-dataset',
@@ -100,6 +107,12 @@ describe('parseCarnaubaPlaywrightCommandOptions', () => {
     expect(() =>
       parseCarnaubaPlaywrightCommandOptions(['--visual-dataset-enabled', 'yes'], {}),
     ).toThrow(InvalidCarnaubaPlaywrightCommandOptionsError);
+    expect(() => parseCarnaubaPlaywrightCommandOptions(['--store-timeout-ms', '0'], {})).toThrow(
+      InvalidCarnaubaPlaywrightCommandOptionsError,
+    );
+    expect(() => parseCarnaubaPlaywrightCommandOptions(['--max-store-attempts', '0'], {})).toThrow(
+      InvalidCarnaubaPlaywrightCommandOptionsError,
+    );
     expect(() =>
       parseCarnaubaPlaywrightCommandOptions(['--visual-dataset-split', 'invalid'], {}),
     ).toThrow(InvalidCarnaubaPlaywrightCommandOptionsError);

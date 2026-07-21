@@ -71,7 +71,7 @@ export function createCarnaubaRunManifest(input: CarnaubaRunManifestInput): Carn
     throw new CarnaubaRunManifestError('completedAtIso cannot be before startedAtIso.');
   }
 
-  const stores = input.result.stores.map((store): CarnaubaRunManifestStoreSummary => {
+  const succeededStores = input.result.stores.map((store): CarnaubaRunManifestStoreSummary => {
     return {
       storeId: store.store.storeId,
       storeName: store.store.name,
@@ -82,20 +82,32 @@ export function createCarnaubaRunManifest(input: CarnaubaRunManifestInput): Carn
       errorMessage: null,
     };
   });
+  const failedStores = input.result.failedStores.map((store): CarnaubaRunManifestStoreSummary => {
+    return {
+      storeId: store.store.storeId,
+      storeName: store.store.name,
+      status: 'failed',
+      leafletsFound: 0,
+      imagesFound: 0,
+      sourceUrl: store.sourceUrl,
+      errorMessage: store.errorMessage,
+    };
+  });
+  const stores = [...succeededStores, ...failedStores];
 
   return {
     runId: input.runId,
     supermarketId: 'carnauba',
     mode: 'playwright',
-    status: stores.length === 0 ? 'failed' : 'succeeded',
+    status: createManifestStatus(succeededStores.length, failedStores.length),
     startedAtIso: input.startedAtIso,
     completedAtIso: input.completedAtIso,
     durationMs: completedMs - startedMs,
     outputDirectoryPath: input.outputDirectoryPath,
     metadataPath: input.metadataPath,
     storesProcessed: stores.length,
-    storesSucceeded: stores.length,
-    storesFailed: 0,
+    storesSucceeded: succeededStores.length,
+    storesFailed: failedStores.length,
     leafletsFound: stores.reduce((total, store) => total + store.leafletsFound, 0),
     imagesFound: stores.reduce((total, store) => total + store.imagesFound, 0),
     sharedLeafletsStored: input.stored.sharedLeaflets.length,
@@ -106,6 +118,21 @@ export function createCarnaubaRunManifest(input: CarnaubaRunManifestInput): Carn
     visualDataset: input.visualDataset,
     stores,
   };
+}
+
+function createManifestStatus(
+  storesSucceeded: number,
+  storesFailed: number,
+): CarnaubaRunManifestStatus {
+  if (storesFailed === 0 && storesSucceeded > 0) {
+    return 'succeeded';
+  }
+
+  if (storesSucceeded > 0) {
+    return 'partially_succeeded';
+  }
+
+  return 'failed';
 }
 
 export async function writeCarnaubaRunManifest(
