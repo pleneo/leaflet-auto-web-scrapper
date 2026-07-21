@@ -71,6 +71,15 @@ describe('FileSystemVisualDatasetSampleRepository', () => {
       new FileSystemVisualDatasetSampleRepository({ rootDirectory }).saveMany([
         {
           ...createSample(),
+          sampleId: ' ',
+        },
+      ]),
+    ).rejects.toThrow(FileSystemVisualDatasetSampleRepositoryError);
+
+    await expect(
+      new FileSystemVisualDatasetSampleRepository({ rootDirectory }).saveMany([
+        {
+          ...createSample(),
           screenshotMetadata: {
             ...createSample().screenshotMetadata,
             fileName: 'sample.txt',
