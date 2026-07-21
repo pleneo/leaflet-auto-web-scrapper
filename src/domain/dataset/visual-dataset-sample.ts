@@ -12,7 +12,7 @@ export interface VisualTargetAnnotation {
   readonly normalizedDocumentBox: NormalizedBoundingBox;
 }
 
-export interface AcademicDatasetSample {
+export interface VisualDatasetSample {
   readonly sampleId: string;
   readonly runId: string;
   readonly supermarketId: SupermarketId;

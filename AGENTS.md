@@ -2,7 +2,7 @@
 
 ## 1. Purpose Of This Repository
 
-This repository is not merely a supermarket leaflet scraper. It is the foundation of a dual-purpose system that combines a real business extraction pipeline with an academic research pipeline in Artificial Intelligence.
+This repository is not merely a supermarket leaflet scraper. It is the foundation of a dual-purpose system that combines a real business extraction pipeline with a visual dataset research pipeline in Artificial Intelligence.
 
 The business problem is practical: supermarket websites publish promotional leaflets as PDFs, image galleries, modals, links, or dynamic pages. The system must navigate those websites, find the current leaflet, extract the downloadable artifact, and persist the result.
 
@@ -11,13 +11,13 @@ The research problem is deeper: conventional web scrapers break when the DOM str
 The project therefore has two inseparable tracks:
 
 - Track A, Production Extraction: a deterministic Playwright-based automation pipeline that navigates websites and extracts supermarket leaflets.
-- Track B, Academic Dataset Generation: an embedded auto-annotation pipeline that captures full-page screenshots and exact target-element coordinates during successful Track A executions.
+- Track B, Visual Dataset Generation: an embedded auto-annotation pipeline that captures full-page screenshots and exact target-element coordinates during successful Track A executions.
 
 A scraper that downloads a leaflet but does not generate visual annotations is incomplete. A scraper that generates annotations but does not solve the real extraction task is also incomplete. Both tracks must evolve together.
 
 ## 2. Research Motivation
 
-The project should be treated as a possible academic specialization axis in AI applied to web automation. Its strongest research value is not "scraping supermarket leaflets"; it is the systematic generation of training data for models that can locate actionable web elements visually.
+The project should be treated as a possible research specialization axis in AI applied to web automation. Its strongest research value is not "scraping supermarket leaflets"; it is the systematic generation of training data for models that can locate actionable web elements visually.
 
 The intended research direction is:
 
@@ -157,7 +157,7 @@ The responsibility boundaries are strict:
 - the use case performs one extraction attempt for one supermarket;
 - the strategy performs the site-specific navigation;
 - the visual capture service performs the standardized screenshot and bounding-box protocol;
-- repositories and storage persist business and academic outputs.
+- repositories and storage persist business and visual dataset outputs.
 
 `ExtractSupermarketLeafletUseCase.execute(...)` must represent one bounded attempt:
 
@@ -283,7 +283,7 @@ export interface ScreenshotMetadata {
   capturedAtIso: string;
 }
 
-export interface AcademicDatasetSample {
+export interface VisualDatasetSample {
   sampleId: string;
   runId: string;
   supermarketId: SupermarketId;
@@ -372,7 +372,7 @@ export interface ExtractionRunSummary {
 export interface ExtractionResult<TMetadata extends LeafletMetadata = LeafletMetadata> {
   runId: string;
   leaflet: PromotionLeaflet<TMetadata>;
-  datasetSamples: AcademicDatasetSample[];
+  datasetSamples: VisualDatasetSample[];
   completedAtIso: string;
 }
 
@@ -384,7 +384,7 @@ export interface StrategyExecutionContext {
 
 export interface StrategyExtractionOutput<TMetadata extends LeafletMetadata = LeafletMetadata> {
   leaflet: PromotionLeaflet<TMetadata>;
-  datasetSamples: AcademicDatasetSample[];
+  datasetSamples: VisualDatasetSample[];
 }
 
 export interface SupermarketStrategy<TMetadata extends LeafletMetadata = LeafletMetadata> {
@@ -398,7 +398,7 @@ These contracts are examples of the expected level of specificity. If the implem
 - no browser-framework types in domain contracts;
 - no unlabeled bounding boxes;
 - no screenshot without coordinate metadata;
-- no extraction result without business and academic payloads.
+- no extraction result without business and visual dataset payloads.
 - no infinite worker lifecycle inside a strategy or one-shot use case.
 
 If infrastructure needs a richer strategy context containing a Playwright `Page`, visual capture adapter, logger, or browser context, that richer type must live outside the domain layer. Domain contracts may define the business shape, but Playwright-specific objects must remain in infrastructure/application boundaries.
@@ -440,7 +440,7 @@ For every state transition, the scraper must follow this order:
 5. Capture scroll position, viewport size, and document dimensions.
 6. Convert the raw Playwright geometry into viewport, document, and normalized coordinate spaces.
 7. Capture a full-page PNG screenshot.
-8. Build an `AcademicDatasetSample`.
+8. Build a `VisualDatasetSample`.
 9. Persist or enqueue the dataset sample.
 10. Execute the action, such as click, navigation, download, or href extraction.
 
@@ -478,7 +478,7 @@ Do not export raw Playwright geometry directly as the final annotation. It must 
 
 ## 12. Semantic Labeling Rules
 
-Labels are part of the academic contribution. They must describe the user's intended action, not the implementation detail of the website.
+Labels are part of the visual dataset contribution. They must describe the user's intended action, not the implementation detail of the website.
 
 Good labels:
 
@@ -583,7 +583,7 @@ Do not return raw Playwright `Locator`, `Page`, `Download`, `Response`, or brows
 
 ## 17. Storage Responsibilities
 
-The project must keep business artifacts and academic artifacts logically separate.
+The project must keep business artifacts and visual dataset artifacts logically separate.
 
 Business payload:
 
@@ -594,7 +594,7 @@ Business payload:
 - downloaded PDF or image files;
 - typed leaflet metadata.
 
-Academic payload:
+Visual dataset payload:
 
 - full-page PNG screenshot;
 - bounding-box annotation;
@@ -606,7 +606,7 @@ Academic payload:
 - dataset split;
 - capture timestamp.
 
-A failed business extraction may still produce useful academic failure data, but that should be handled by an explicit failure-data policy. Do not mix failed samples into training data without labeling or review.
+A failed business extraction may still produce useful visual dataset failure data, but that should be handled by an explicit failure-data policy. Do not mix failed samples into training data without labeling or review.
 
 ## 18. Definition Of Done For A New Supermarket Strategy
 
@@ -619,7 +619,7 @@ A new supermarket scraper is not complete until it satisfies all of the followin
 - captures full-page screenshots;
 - maps all infrastructure data into domain entities;
 - downloads or resolves the current leaflet artifact;
-- persists business and academic payloads through repository interfaces;
+- persists business and visual dataset payloads through repository interfaces;
 - uses typed metadata without loose fields;
 - logs state transitions and fallback paths;
 - does not implement its own infinite loop, scheduler, retry policy, or queue;
@@ -704,7 +704,7 @@ Forbidden:
 - saving screenshots without labels;
 - saving labels without screenshots;
 - saving coordinates without validating coordinate space;
-- treating academic data collection as optional.
+- treating visual dataset collection as optional.
 
 ## 22. Commit Convention
 
@@ -770,7 +770,7 @@ If a user request conflicts with these rules, explain the conflict and propose t
 The project should be engineered as if it may become both:
 
 - a production extraction service used by a real business;
-- a research artifact supporting a serious AI/Computer Science academic path.
+- a research artifact supporting a serious AI/Computer Science research path.
 
 That means the implementation must be robust, typed, observable, testable, and scientifically useful.
 
