@@ -10,6 +10,8 @@ export interface CarnaubaPlaywrightCommandOptions {
   readonly siteBaseUrl: string;
   readonly viewport: VisualViewport;
   readonly timeoutMs: number;
+  readonly storeTimeoutMs: number;
+  readonly maxStoreAttempts: number;
   readonly settleDelayMs: number;
   readonly visualDatasetEnabled: boolean;
   readonly visualDatasetRootDirectory: string;
@@ -75,6 +77,20 @@ export function parseCarnaubaPlaywrightCommandOptions(
       'timeout-ms',
       'CARNAUBA_PLAYWRIGHT_TIMEOUT_MS',
       30_000,
+    ),
+    storeTimeoutMs: readPositiveInteger(
+      values,
+      env,
+      'store-timeout-ms',
+      'CARNAUBA_PLAYWRIGHT_STORE_TIMEOUT_MS',
+      120_000,
+    ),
+    maxStoreAttempts: readPositiveInteger(
+      values,
+      env,
+      'max-store-attempts',
+      'CARNAUBA_PLAYWRIGHT_MAX_STORE_ATTEMPTS',
+      2,
     ),
     settleDelayMs: readNonNegativeInteger(
       values,

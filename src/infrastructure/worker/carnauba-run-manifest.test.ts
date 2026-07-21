@@ -102,6 +102,50 @@ describe('createCarnaubaRunManifest', () => {
       }),
     ).toThrow(CarnaubaRunManifestError);
   });
+
+  it('summarizes a partially successful run', () => {
+    const result = {
+      ...createResult(),
+      failedStores: [
+        {
+          store: {
+            storeId: 65,
+            name: 'Aldeota',
+            cnpj: '',
+            corporateName: '',
+          },
+          sourceUrl: 'https://example.com/loja/65/encartes',
+          attempts: 2,
+          errorMessage: 'Store unavailable.',
+        },
+      ],
+    };
+
+    const manifest = createCarnaubaRunManifest({
+      runId: 'run-1',
+      startedAtIso: '2026-07-21T10:00:00.000Z',
+      completedAtIso: '2026-07-21T10:00:01.000Z',
+      outputDirectoryPath: '/tmp/output',
+      metadataPath: '/tmp/output/metadata.json',
+      result,
+      stored: createStoredExtraction(),
+      visualDataset: {
+        enabled: false,
+        rootDirectory: null,
+        samplesCreated: 0,
+      },
+    });
+
+    expect(manifest.status).toBe('partially_succeeded');
+    expect(manifest.storesProcessed).toBe(3);
+    expect(manifest.storesSucceeded).toBe(2);
+    expect(manifest.storesFailed).toBe(1);
+    expect(manifest.stores[2]).toMatchObject({
+      storeId: 65,
+      status: 'failed',
+      errorMessage: 'Store unavailable.',
+    });
+  });
 });
 
 describe('writeCarnaubaRunManifest', () => {
@@ -158,6 +202,7 @@ function createResult(): CarnaubaPlaywrightExtractionResult {
           corporateName: '',
         },
         sourceUrl: 'https://example.com/loja/79/encartes',
+        attempts: 1,
         leaflets: [
           {
             leafletId: 'leaflet-1',
@@ -185,6 +230,7 @@ function createResult(): CarnaubaPlaywrightExtractionResult {
           corporateName: '',
         },
         sourceUrl: 'https://example.com/loja/70/encartes',
+        attempts: 1,
         leaflets: [
           {
             leafletId: 'leaflet-2',
@@ -221,6 +267,7 @@ function createResult(): CarnaubaPlaywrightExtractionResult {
         ],
       },
     ],
+    failedStores: [],
   };
 }
 

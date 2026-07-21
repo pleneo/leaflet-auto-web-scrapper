@@ -14,6 +14,14 @@ export interface CarnaubaPlaywrightExtractedStore {
   readonly store: CarnaubaStore;
   readonly sourceUrl: string;
   readonly leaflets: readonly ExtractedLeaflet[];
+  readonly attempts: number;
+}
+
+export interface CarnaubaPlaywrightFailedStore {
+  readonly store: CarnaubaStore;
+  readonly sourceUrl: string;
+  readonly attempts: number;
+  readonly errorMessage: string;
 }
 
 export interface CarnaubaPlaywrightExtractionResult {
@@ -21,6 +29,7 @@ export interface CarnaubaPlaywrightExtractionResult {
   readonly source: 'carnauba-playwright';
   readonly extractedAtIso: string;
   readonly stores: readonly CarnaubaPlaywrightExtractedStore[];
+  readonly failedStores: readonly CarnaubaPlaywrightFailedStore[];
 }
 
 export interface CarnaubaPlaywrightExtractionInput {
@@ -29,6 +38,8 @@ export interface CarnaubaPlaywrightExtractionInput {
   readonly siteBaseUrl: string;
   readonly viewport: VisualViewport;
   readonly timeoutMs: number;
+  readonly storeTimeoutMs: number;
+  readonly maxStoreAttempts: number;
   readonly settleDelayMs: number;
   readonly visualDataset?: CarnaubaPlaywrightVisualDatasetInput;
 }
@@ -89,6 +100,7 @@ export class CarnaubaPlaywrightExtractionService {
 
     const stores = await this.resolveStores(input);
     const extractedStores: CarnaubaPlaywrightExtractedStore[] = [];
+    const failedStores: CarnaubaPlaywrightFailedStore[] = [];
 
     for (const store of stores) {
       const homeUrl = buildStoreHomeUrl(input.siteBaseUrl, store.storeId);
@@ -99,19 +111,33 @@ export class CarnaubaPlaywrightExtractionService {
         sourceUrl,
       });
 
-      const result = await this.leafletExtractor.extract(
-        createStoreExtractionInput(input, store, homeUrl, sourceUrl),
-      );
+      const result = await this.extractStoreWithRetry(input, store, homeUrl, sourceUrl);
+
+      if (result.status === 'failed') {
+        this.logger.error('Carnauba Playwright store extraction failed.', {
+          storeId: store.storeId,
+          attempts: result.attempts,
+        });
+        failedStores.push({
+          store,
+          sourceUrl,
+          attempts: result.attempts,
+          errorMessage: result.errorMessage,
+        });
+        continue;
+      }
 
       this.logger.info('Finished Carnauba Playwright store extraction.', {
         storeId: store.storeId,
         leaflets: result.leaflets.length,
+        attempts: result.attempts,
       });
 
       extractedStores.push({
         store,
         sourceUrl,
         leaflets: result.leaflets,
+        attempts: result.attempts,
       });
     }
 
@@ -120,6 +146,58 @@ export class CarnaubaPlaywrightExtractionService {
       source: 'carnauba-playwright',
       extractedAtIso: this.clock.nowIso(),
       stores: extractedStores,
+      failedStores,
+    };
+  }
+
+  private async extractStoreWithRetry(
+    input: CarnaubaPlaywrightExtractionInput,
+    store: CarnaubaStore,
+    homeUrl: string,
+    sourceUrl: string,
+  ): Promise<
+    | {
+        readonly status: 'succeeded';
+        readonly attempts: number;
+        readonly leaflets: readonly ExtractedLeaflet[];
+      }
+    | {
+        readonly status: 'failed';
+        readonly attempts: number;
+        readonly errorMessage: string;
+      }
+  > {
+    let lastErrorMessage = 'Unknown store extraction failure.';
+
+    for (let attempt = 1; attempt <= input.maxStoreAttempts; attempt += 1) {
+      try {
+        const result = await withTimeout(
+          this.leafletExtractor.extract(
+            createStoreExtractionInput(input, store, homeUrl, sourceUrl),
+          ),
+          input.storeTimeoutMs,
+          `Carnauba store ${String(store.storeId)} extraction timed out.`,
+        );
+
+        return {
+          status: 'succeeded',
+          attempts: attempt,
+          leaflets: result.leaflets,
+        };
+      } catch (error) {
+        lastErrorMessage =
+          error instanceof Error ? error.message : 'Unexpected extraction failure.';
+        this.logger.warn('Carnauba Playwright store extraction attempt failed.', {
+          storeId: store.storeId,
+          attempt,
+        });
+      }
+    }
+
+    return {
+      status: 'failed',
+      attempts: input.maxStoreAttempts,
+      errorMessage: lastErrorMessage,
     };
   }
 
@@ -212,10 +290,35 @@ function validateInput(input: CarnaubaPlaywrightExtractionInput): void {
 
   validateAbsoluteUrl(input.siteBaseUrl, 'siteBaseUrl');
   validatePositiveInteger(input.timeoutMs, 'timeoutMs');
+  validatePositiveInteger(input.storeTimeoutMs, 'storeTimeoutMs');
+  validatePositiveInteger(input.maxStoreAttempts, 'maxStoreAttempts');
 
   if (!Number.isInteger(input.settleDelayMs) || input.settleDelayMs < 0) {
     throw new CarnaubaPlaywrightExtractionError('settleDelayMs must be a non-negative integer.');
   }
+}
+
+function withTimeout<TValue>(
+  promise: Promise<TValue>,
+  timeoutMs: number,
+  message: string,
+): Promise<TValue> {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const timeout = setTimeout(() => {
+      rejectPromise(new CarnaubaPlaywrightExtractionError(message));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolvePromise(value);
+      },
+      (error: Error) => {
+        clearTimeout(timeout);
+        rejectPromise(error);
+      },
+    );
+  });
 }
 
 function validateAbsoluteUrl(url: string, fieldName: string): void {

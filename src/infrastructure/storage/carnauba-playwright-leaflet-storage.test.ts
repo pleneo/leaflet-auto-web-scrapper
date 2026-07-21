@@ -110,6 +110,7 @@ function createResult(): CarnaubaPlaywrightExtractionResult {
           corporateName: '',
         },
         sourceUrl: 'https://carnaubasupermercados.com.br/loja/79/encartes',
+        attempts: 1,
         leaflets: [
           {
             leafletId: '1-sao-joao',
@@ -141,6 +142,7 @@ function createResult(): CarnaubaPlaywrightExtractionResult {
           corporateName: '',
         },
         sourceUrl: 'https://carnaubasupermercados.com.br/loja/80/encartes',
+        attempts: 1,
         leaflets: [
           {
             leafletId: '1-sao-joao-copy',
@@ -165,6 +167,7 @@ function createResult(): CarnaubaPlaywrightExtractionResult {
         ],
       },
     ],
+    failedStores: [],
   };
 }
 

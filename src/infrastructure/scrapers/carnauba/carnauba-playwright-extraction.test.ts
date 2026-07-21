@@ -30,6 +30,8 @@ describe('CarnaubaPlaywrightExtractionService', () => {
       siteBaseUrl: 'https://carnaubasupermercados.com.br',
       viewport: createVisualViewport({ width: 1366, height: 768, deviceScaleFactor: 1 }),
       timeoutMs: 30_000,
+      storeTimeoutMs: 60_000,
+      maxStoreAttempts: 2,
       settleDelayMs: 5_000,
     });
 
@@ -50,6 +52,7 @@ describe('CarnaubaPlaywrightExtractionService', () => {
     });
     expect(result.stores[0]?.leaflets[0]?.leafletId).toBe('leaflet-79');
     expect(result.stores[1]?.leaflets[0]?.leafletId).toBe('leaflet-70');
+    expect(result.failedStores).toEqual([]);
   });
 
   it('passes visual dataset context to each store extraction', async () => {
@@ -68,6 +71,8 @@ describe('CarnaubaPlaywrightExtractionService', () => {
       siteBaseUrl: 'https://carnaubasupermercados.com.br',
       viewport: createVisualViewport({ width: 1366, height: 768, deviceScaleFactor: 1 }),
       timeoutMs: 30_000,
+      storeTimeoutMs: 60_000,
+      maxStoreAttempts: 2,
       settleDelayMs: 5_000,
       visualDataset: {
         runId: 'run-1',
@@ -112,11 +117,87 @@ describe('CarnaubaPlaywrightExtractionService', () => {
       siteBaseUrl: 'https://carnaubasupermercados.com.br',
       viewport: createVisualViewport({ width: 1366, height: 768, deviceScaleFactor: 1 }),
       timeoutMs: 30_000,
+      storeTimeoutMs: 60_000,
+      maxStoreAttempts: 2,
       settleDelayMs: 5_000,
     });
 
     expect(storeCatalogProvider.calls).toBe(0);
     expect(result.stores).toHaveLength(2);
+  });
+
+  it('keeps extracting stores after one store fails all attempts', async () => {
+    const leafletExtractor = new FakeSingleStoreExtractor({
+      failingStoreIds: [79],
+    });
+    const logger = new FakeLogger();
+    const service = new CarnaubaPlaywrightExtractionService(
+      new FakeStoreCatalogProvider(createStores()),
+      new FakeStoreSnapshotCache(null),
+      leafletExtractor,
+      new FixedClock('2026-07-20T15:59:00.000Z'),
+      logger,
+    );
+
+    const result = await service.extract({
+      brandId: 27,
+      storeCacheTtlMs: 86_400_000,
+      siteBaseUrl: 'https://carnaubasupermercados.com.br',
+      viewport: createVisualViewport({ width: 1366, height: 768, deviceScaleFactor: 1 }),
+      timeoutMs: 30_000,
+      storeTimeoutMs: 60_000,
+      maxStoreAttempts: 2,
+      settleDelayMs: 5_000,
+    });
+
+    expect(result.stores.map((store) => store.store.storeId)).toEqual([70]);
+    expect(result.failedStores).toEqual([
+      {
+        store: createStores()[0],
+        sourceUrl: 'https://carnaubasupermercados.com.br/loja/79/encartes',
+        attempts: 2,
+        errorMessage: 'Store 79 unavailable.',
+      },
+    ]);
+    expect(leafletExtractor.sourceUrls).toEqual([
+      'https://carnaubasupermercados.com.br/loja/79/encartes',
+      'https://carnaubasupermercados.com.br/loja/79/encartes',
+      'https://carnaubasupermercados.com.br/loja/70/encartes',
+    ]);
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+    expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a store and records the successful attempt count', async () => {
+    const leafletExtractor = new FakeSingleStoreExtractor({
+      transientFailuresByStoreId: [
+        {
+          storeId: 79,
+          failures: 1,
+        },
+      ],
+    });
+    const service = new CarnaubaPlaywrightExtractionService(
+      new FakeStoreCatalogProvider(createStores().slice(0, 1)),
+      new FakeStoreSnapshotCache(null),
+      leafletExtractor,
+      new FixedClock('2026-07-20T15:59:00.000Z'),
+      new FakeLogger(),
+    );
+
+    const result = await service.extract({
+      brandId: 27,
+      storeCacheTtlMs: 86_400_000,
+      siteBaseUrl: 'https://carnaubasupermercados.com.br',
+      viewport: createVisualViewport({ width: 1366, height: 768, deviceScaleFactor: 1 }),
+      timeoutMs: 30_000,
+      storeTimeoutMs: 60_000,
+      maxStoreAttempts: 2,
+      settleDelayMs: 5_000,
+    });
+
+    expect(result.stores[0]?.attempts).toBe(2);
+    expect(result.failedStores).toEqual([]);
   });
 
   it('rejects invalid input and store URLs', async () => {
@@ -135,6 +216,8 @@ describe('CarnaubaPlaywrightExtractionService', () => {
         siteBaseUrl: 'https://carnaubasupermercados.com.br',
         viewport: createVisualViewport({ width: 1366, height: 768, deviceScaleFactor: 1 }),
         timeoutMs: 30_000,
+        storeTimeoutMs: 60_000,
+        maxStoreAttempts: 2,
         settleDelayMs: 5_000,
       }),
     ).rejects.toThrow(CarnaubaPlaywrightExtractionError);
@@ -166,6 +249,8 @@ describe('CarnaubaPlaywrightExtractionService', () => {
       siteBaseUrl: 'https://carnaubasupermercados.com.br',
       viewport: createVisualViewport({ width: 1366, height: 768, deviceScaleFactor: 1 }),
       timeoutMs: 30_000,
+      storeTimeoutMs: 60_000,
+      maxStoreAttempts: 2,
       settleDelayMs: 5_000,
     });
 
@@ -189,6 +274,8 @@ describe('CarnaubaPlaywrightExtractionService', () => {
         siteBaseUrl: 'https://carnaubasupermercados.com.br',
         viewport: createVisualViewport({ width: 1366, height: 768, deviceScaleFactor: 1 }),
         timeoutMs: 30_000,
+        storeTimeoutMs: 60_000,
+        maxStoreAttempts: 2,
         settleDelayMs: 5_000,
       }),
     ).rejects.toThrow('Catalog unavailable.');
@@ -208,6 +295,8 @@ describe('CarnaubaPlaywrightExtractionService', () => {
       siteBaseUrl: 'https://carnaubasupermercados.com.br',
       viewport: createVisualViewport({ width: 1366, height: 768, deviceScaleFactor: 1 }),
       timeoutMs: 30_000,
+      storeTimeoutMs: 60_000,
+      maxStoreAttempts: 2,
       settleDelayMs: 5_000,
     };
 
@@ -218,6 +307,12 @@ describe('CarnaubaPlaywrightExtractionService', () => {
       CarnaubaPlaywrightExtractionError,
     );
     await expect(service.extract({ ...validInput, timeoutMs: 0 })).rejects.toThrow(
+      CarnaubaPlaywrightExtractionError,
+    );
+    await expect(service.extract({ ...validInput, storeTimeoutMs: 0 })).rejects.toThrow(
+      CarnaubaPlaywrightExtractionError,
+    );
+    await expect(service.extract({ ...validInput, maxStoreAttempts: 0 })).rejects.toThrow(
       CarnaubaPlaywrightExtractionError,
     );
     await expect(service.extract({ ...validInput, settleDelayMs: -1 })).rejects.toThrow(
@@ -241,6 +336,8 @@ describe('CarnaubaPlaywrightExtractionService', () => {
         siteBaseUrl: 'https://carnaubasupermercados.com.br',
         viewport: createVisualViewport({ width: 1366, height: 768, deviceScaleFactor: 1 }),
         timeoutMs: 30_000,
+        storeTimeoutMs: 60_000,
+        maxStoreAttempts: 2,
         settleDelayMs: 5_000,
       }),
     ).rejects.toThrow(CarnaubaPlaywrightExtractionError);
@@ -288,12 +385,32 @@ class FailingStoreCatalogProvider implements CarnaubaStoreCatalogProvider {
   }
 }
 
+interface FakeSingleStoreExtractorConfig {
+  readonly failingStoreIds?: readonly number[];
+  readonly transientFailuresByStoreId?: readonly {
+    readonly storeId: number;
+    readonly failures: number;
+  }[];
+}
+
 class FakeSingleStoreExtractor implements SingleStoreCarnaubaLeafletExtractor {
   readonly homeUrls: string[] = [];
 
   readonly sourceUrls: string[] = [];
 
   readonly receivedInputs: Parameters<SingleStoreCarnaubaLeafletExtractor['extract']>[0][] = [];
+
+  private readonly failingStoreIds: readonly number[];
+
+  private readonly remainingTransientFailures = new Map<number, number>();
+
+  constructor(config: FakeSingleStoreExtractorConfig = {}) {
+    this.failingStoreIds = config.failingStoreIds ?? [];
+
+    for (const transientFailure of config.transientFailuresByStoreId ?? []) {
+      this.remainingTransientFailures.set(transientFailure.storeId, transientFailure.failures);
+    }
+  }
 
   extract(input: Parameters<SingleStoreCarnaubaLeafletExtractor['extract']>[0]): Promise<{
     readonly leaflets: readonly [
@@ -309,19 +426,30 @@ class FakeSingleStoreExtractor implements SingleStoreCarnaubaLeafletExtractor {
     this.receivedInputs.push(input);
     this.homeUrls.push(input.homeUrl);
     this.sourceUrls.push(input.sourceUrl);
-    const storeId = input.sourceUrl.includes('/79/') ? '79' : '70';
+    const storeId = input.sourceUrl.includes('/79/') ? 79 : 70;
+
+    if (this.failingStoreIds.includes(storeId)) {
+      return Promise.reject(new Error(`Store ${String(storeId)} unavailable.`));
+    }
+
+    const remainingTransientFailures = this.remainingTransientFailures.get(storeId) ?? 0;
+
+    if (remainingTransientFailures > 0) {
+      this.remainingTransientFailures.set(storeId, remainingTransientFailures - 1);
+      return Promise.reject(new Error(`Store ${String(storeId)} transient failure.`));
+    }
 
     return Promise.resolve({
       leaflets: [
         {
-          leafletId: `leaflet-${storeId}`,
-          title: `Leaflet ${storeId}`,
+          leafletId: `leaflet-${String(storeId)}`,
+          title: `Leaflet ${String(storeId)}`,
           cardIndex: 0,
-          coverImageUrl: `https://cdn.example.com/${storeId}/cover.png`,
+          coverImageUrl: `https://cdn.example.com/${String(storeId)}/cover.png`,
           images: [
             {
               order: 1,
-              imageUrl: `https://cdn.example.com/${storeId}/1.png`,
+              imageUrl: `https://cdn.example.com/${String(storeId)}/1.png`,
             },
           ],
         },
