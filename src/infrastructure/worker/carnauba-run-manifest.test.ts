@@ -39,7 +39,8 @@ describe('createCarnaubaRunManifest', () => {
       leafletsFound: 3,
       imagesFound: 6,
       sharedLeafletsStored: 2,
-      sharedImagesStored: 5,
+      sharedImagesStored: 4,
+      sharedImagesReused: 2,
       visualDataset: {
         enabled: true,
         rootDirectory: '/tmp/visual-dataset',
@@ -316,6 +317,10 @@ function createStoredExtraction(): StoredCarnaubaPlaywrightExtraction {
     directoryPath: '/tmp/output',
     metadataPath: '/tmp/output/metadata.json',
     sharedLeafletsDirectoryPath: '/tmp/output/shared-leaflets',
+    sharedLeafletsCreated: 2,
+    sharedLeafletsReused: 1,
+    sharedImagesDownloaded: 4,
+    sharedImagesReused: 2,
     sharedLeaflets: [
       {
         contentSignature: 'signature-1',

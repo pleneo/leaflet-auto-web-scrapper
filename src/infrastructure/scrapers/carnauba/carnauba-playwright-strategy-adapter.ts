@@ -105,8 +105,8 @@ export class CarnaubaPlaywrightStrategyAdapter implements PlaywrightExtractionSt
       supermarketId: this.supermarketId,
       status: manifest.status,
       leafletsFound: manifest.leafletsFound,
-      artifactsDownloaded: manifest.sharedImagesStored,
-      artifactsReused: Math.max(0, manifest.imagesFound - manifest.sharedImagesStored),
+      artifactsDownloaded: stored.sharedImagesDownloaded,
+      artifactsReused: stored.sharedImagesReused,
       datasetSamplesCreated: samplesCreated,
       failures: result.failedStores.map((failedStore) => ({
         targetId: `${input.target.targetId}:store:${String(failedStore.store.storeId)}`,
