@@ -120,6 +120,34 @@ describe('ScheduledExtractionRunner', () => {
     });
   });
 
+  it('logs when an extraction target has no new leaflet artifacts', async () => {
+    const logger = new FakeLogger();
+    const runner = createRunner({
+      logger,
+      strategy: new FakePlaywrightStrategy({
+        output: {
+          leafletsFound: 2,
+          artifactsDownloaded: 0,
+          artifactsReused: 2,
+        },
+      }),
+      targets: [carnaubaTarget],
+    });
+
+    await runner.runCycle();
+
+    expect(logger.info).toHaveBeenCalledWith(
+      'Extraction target completed without new leaflet artifacts.',
+      {
+        targetId: 'carnauba',
+        supermarketId: 'carnauba',
+        runId: 'carnauba-playwright-2026-07-22T10-00-02-000Z-attempt-1',
+        leafletsFound: 2,
+        artifactsReused: 2,
+      },
+    );
+  });
+
   it('releases a target lock after failure', async () => {
     const lock = new InMemoryExtractionLock();
     const runner = createRunner({
@@ -172,6 +200,7 @@ interface CreateRunnerInput {
     readonly onlyTargetIds: readonly string[];
   };
   readonly delay?: (durationMs: number) => Promise<void>;
+  readonly logger?: Logger;
   readonly lock?: InMemoryExtractionLock;
   readonly onlyTargetIds?: readonly string[];
   readonly strategy: PlaywrightExtractionStrategy;
@@ -194,7 +223,7 @@ function createRunner(input: CreateRunnerInput): ScheduledExtractionRunner {
       strategyRegistry: new PlaywrightStrategyRegistry([input.strategy]),
       lock: input.lock ?? new InMemoryExtractionLock(),
       clock: new IncrementingClock(),
-      logger: new FakeLogger(),
+      logger: input.logger ?? new FakeLogger(),
       delay: input.delay ?? (() => Promise.resolve()),
     },
   );
@@ -207,8 +236,28 @@ class FakePlaywrightStrategy implements PlaywrightExtractionStrategy {
 
   private remainingFailures: number;
 
-  constructor(config: { readonly failuresBeforeSuccess: number } = { failuresBeforeSuccess: 0 }) {
-    this.remainingFailures = config.failuresBeforeSuccess;
+  private readonly output: {
+    readonly leafletsFound: number;
+    readonly artifactsDownloaded: number;
+    readonly artifactsReused: number;
+  };
+
+  constructor(
+    config: {
+      readonly failuresBeforeSuccess?: number;
+      readonly output?: {
+        readonly leafletsFound: number;
+        readonly artifactsDownloaded: number;
+        readonly artifactsReused: number;
+      };
+    } = {},
+  ) {
+    this.output = config.output ?? {
+      leafletsFound: 1,
+      artifactsDownloaded: 1,
+      artifactsReused: 0,
+    };
+    this.remainingFailures = config.failuresBeforeSuccess ?? 0;
   }
 
   execute(input: PlaywrightExtractionInput): Promise<{
@@ -216,9 +265,9 @@ class FakePlaywrightStrategy implements PlaywrightExtractionStrategy {
     readonly targetId: string;
     readonly supermarketId: 'carnauba';
     readonly status: 'succeeded';
-    readonly leafletsFound: 1;
-    readonly artifactsDownloaded: 1;
-    readonly artifactsReused: 0;
+    readonly leafletsFound: number;
+    readonly artifactsDownloaded: number;
+    readonly artifactsReused: number;
     readonly datasetSamplesCreated: 1;
     readonly failures: readonly [];
   }> {
@@ -234,9 +283,9 @@ class FakePlaywrightStrategy implements PlaywrightExtractionStrategy {
       targetId: input.target.targetId,
       supermarketId: 'carnauba',
       status: 'succeeded',
-      leafletsFound: 1,
-      artifactsDownloaded: 1,
-      artifactsReused: 0,
+      leafletsFound: this.output.leafletsFound,
+      artifactsDownloaded: this.output.artifactsDownloaded,
+      artifactsReused: this.output.artifactsReused,
       datasetSamplesCreated: 1,
       failures: [],
     });
