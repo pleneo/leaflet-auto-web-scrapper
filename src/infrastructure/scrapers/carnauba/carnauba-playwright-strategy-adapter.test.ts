@@ -54,6 +54,32 @@ describe('CarnaubaPlaywrightStrategyAdapter', () => {
       artifactsDownloaded: 1,
       artifactsReused: 1,
       datasetSamplesCreated: 4,
+      units: [
+        {
+          unitId: '79',
+          unitName: 'Maestro',
+          status: 'succeeded',
+          sourceUrl: 'https://carnaubasupermercados.com.br/loja/79/encartes',
+          leaflets: [
+            {
+              leafletKey: 'signature-1',
+              title: 'Leaflet 1',
+              contentSignature: 'signature-1',
+              imageCount: 1,
+              sourceUrl: 'https://cdn.example.com/cover.png',
+            },
+          ],
+          errorMessage: null,
+        },
+        {
+          unitId: '70',
+          unitName: 'Messejana',
+          status: 'failed',
+          sourceUrl: 'https://carnaubasupermercados.com.br/loja/70/encartes',
+          leaflets: [],
+          errorMessage: 'Store unavailable.',
+        },
+      ],
       failures: [
         {
           targetId: 'carnauba:store:70',
@@ -99,6 +125,84 @@ describe('CarnaubaPlaywrightStrategyAdapter', () => {
 
     expect(output.datasetSamplesCreated).toBe(0);
     expect(extractionService.inputs[0]?.visualDataset).toBeUndefined();
+  });
+
+  it('maps stored stores without leaflets as empty units', async () => {
+    const outputDirectory = join(rootDirectory, 'leaflets');
+    const storedDirectory = join(outputDirectory, 'carnauba', '2026-07-22', '10-00');
+    await mkdir(storedDirectory, {
+      recursive: true,
+    });
+    const adapter = createAdapter({
+      countVisualDatasetSamples: vi.fn(() => Promise.resolve(0)),
+      extractionService: new FakeCarnaubaExtractionService({
+        ...createExtractionResult(),
+        stores: [
+          {
+            store: {
+              storeId: 79,
+              name: 'Maestro',
+              cnpj: '',
+              corporateName: '',
+            },
+            sourceUrl: 'https://carnaubasupermercados.com.br/loja/79/encartes',
+            attempts: 1,
+            leaflets: [],
+          },
+        ],
+        failedStores: [],
+      }),
+      outputDirectory,
+      storage: new FakeCarnaubaStorage({
+        ...createStoredExtraction(storedDirectory),
+        sharedLeaflets: [],
+        stores: [
+          {
+            storeId: 79,
+            storeName: 'Maestro',
+            sourceUrl: 'https://carnaubasupermercados.com.br/loja/79/encartes',
+            directoryPath: join(storedDirectory, 'stores', '79-maestro'),
+            metadataPath: join(storedDirectory, 'stores', '79-maestro', 'metadata.json'),
+            leafletsDirectoryPath: join(storedDirectory, 'stores', '79-maestro', 'leaflets'),
+            leaflets: [],
+          },
+        ],
+      }),
+    });
+
+    const output = await adapter.execute(createInput('disabled'));
+
+    expect(output.units).toEqual([
+      {
+        unitId: '79',
+        unitName: 'Maestro',
+        status: 'empty',
+        sourceUrl: 'https://carnaubasupermercados.com.br/loja/79/encartes',
+        leaflets: [],
+        errorMessage: null,
+      },
+    ]);
+  });
+
+  it('maps leaflets without shared metadata with zero image count', async () => {
+    const outputDirectory = join(rootDirectory, 'leaflets');
+    const storedDirectory = join(outputDirectory, 'carnauba', '2026-07-22', '10-00');
+    await mkdir(storedDirectory, {
+      recursive: true,
+    });
+    const adapter = createAdapter({
+      countVisualDatasetSamples: vi.fn(() => Promise.resolve(0)),
+      extractionService: new FakeCarnaubaExtractionService(createExtractionResult()),
+      outputDirectory,
+      storage: new FakeCarnaubaStorage({
+        ...createStoredExtraction(storedDirectory),
+        sharedLeaflets: [],
+      }),
+    });
+
+    const output = await adapter.execute(createInput('disabled'));
+
+    expect(output.units[0]?.leaflets[0]?.imageCount).toBe(0);
   });
 
   function createAdapter(input: {
@@ -231,7 +335,33 @@ function createStoredExtraction(directoryPath: string): StoredCarnaubaPlaywright
         ],
       },
     ],
-    stores: [],
+    stores: [
+      {
+        storeId: 79,
+        storeName: 'Maestro',
+        sourceUrl: 'https://carnaubasupermercados.com.br/loja/79/encartes',
+        directoryPath: join(directoryPath, 'stores', '79-maestro'),
+        metadataPath: join(directoryPath, 'stores', '79-maestro', 'metadata.json'),
+        leafletsDirectoryPath: join(directoryPath, 'stores', '79-maestro', 'leaflets'),
+        leaflets: [
+          {
+            leafletId: 'leaflet-1',
+            title: 'Leaflet 1',
+            cardIndex: 0,
+            coverImageUrl: 'https://cdn.example.com/cover.png',
+            contentSignature: 'signature-1',
+            sharedLeafletDirectoryPath: join(directoryPath, 'shared-leaflets', 'signature-1'),
+            referencePath: join(
+              directoryPath,
+              'stores',
+              '79-maestro',
+              'leaflets',
+              'leaflet-1.json',
+            ),
+          },
+        ],
+      },
+    ],
   };
 }
 
