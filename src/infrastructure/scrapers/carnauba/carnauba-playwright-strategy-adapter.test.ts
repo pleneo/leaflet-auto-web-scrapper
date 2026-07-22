@@ -207,6 +207,10 @@ function createStoredExtraction(directoryPath: string): StoredCarnaubaPlaywright
     directoryPath,
     metadataPath: join(directoryPath, 'metadata.json'),
     sharedLeafletsDirectoryPath: join(directoryPath, 'shared-leaflets'),
+    sharedLeafletsCreated: 1,
+    sharedLeafletsReused: 0,
+    sharedImagesDownloaded: 1,
+    sharedImagesReused: 1,
     sharedLeaflets: [
       {
         contentSignature: 'signature-1',

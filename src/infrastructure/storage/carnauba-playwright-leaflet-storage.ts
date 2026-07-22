@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type {
   ExtractedLeaflet,
@@ -9,11 +9,7 @@ import type {
   CarnaubaPlaywrightExtractedStore,
   CarnaubaPlaywrightExtractionResult,
 } from '../scrapers/carnauba/carnauba-playwright-extraction';
-import type {
-  DownloadedLeafletImage,
-  LeafletImageContentType,
-  LeafletImageHttpClient,
-} from './leaflet-image-storage';
+import type { LeafletImageContentType, LeafletImageHttpClient } from './leaflet-image-storage';
 
 export interface StoreCarnaubaPlaywrightExtractionInput {
   readonly rootDirectory: string;
@@ -64,12 +60,18 @@ export interface StoredCarnaubaPlaywrightExtraction {
   readonly metadataPath: string;
   readonly sharedLeafletsDirectoryPath: string;
   readonly sharedLeaflets: readonly StoredCarnaubaPlaywrightSharedLeaflet[];
+  readonly sharedLeafletsCreated: number;
+  readonly sharedLeafletsReused: number;
+  readonly sharedImagesDownloaded: number;
+  readonly sharedImagesReused: number;
   readonly stores: readonly StoredCarnaubaPlaywrightStore[];
 }
 
 interface CachedDownloadedImage {
   readonly canonicalUrl: string;
-  readonly downloadedImage: DownloadedLeafletImage;
+  readonly filePath: string;
+  readonly contentType: LeafletImageContentType;
+  readonly byteLength: number;
   readonly contentHash: string;
 }
 
@@ -77,7 +79,9 @@ interface PreparedLeafletImage {
   readonly order: number;
   readonly sourceUrl: string;
   readonly canonicalUrl: string;
-  readonly downloadedImage: DownloadedLeafletImage;
+  readonly filePath: string;
+  readonly contentType: LeafletImageContentType;
+  readonly byteLength: number;
   readonly contentHash: string;
 }
 
@@ -85,6 +89,26 @@ interface PreparedLeaflet {
   readonly leaflet: ExtractedLeaflet;
   readonly contentSignature: string;
   readonly images: readonly PreparedLeafletImage[];
+}
+
+interface StorageCounters {
+  sharedLeafletsCreated: number;
+  sharedLeafletsReused: number;
+  sharedImagesDownloaded: number;
+  sharedImagesReused: number;
+}
+
+interface PersistentImageIndex {
+  readonly version: 1;
+  readonly images: readonly PersistentImageIndexEntry[];
+}
+
+interface PersistentImageIndexEntry {
+  readonly canonicalUrl: string;
+  readonly filePath: string;
+  readonly contentType: LeafletImageContentType;
+  readonly byteLength: number;
+  readonly contentHash: string;
 }
 
 export class CarnaubaPlaywrightLeafletStorageError extends Error {
@@ -105,23 +129,35 @@ export class LocalCarnaubaPlaywrightLeafletStorage {
     input: StoreCarnaubaPlaywrightExtractionInput,
   ): Promise<StoredCarnaubaPlaywrightExtraction> {
     const directoryPath = buildExtractionDirectoryPath(input.rootDirectory, input.result);
-    const sharedLeafletsDirectoryPath = join(directoryPath, 'shared-leaflets');
+    const sharedLeafletsDirectoryPath = buildSharedLeafletsDirectoryPath(input.rootDirectory);
+    const sharedImagesDirectoryPath = buildSharedImagesDirectoryPath(input.rootDirectory);
     await mkdir(sharedLeafletsDirectoryPath, {
       recursive: true,
     });
+    await mkdir(sharedImagesDirectoryPath, {
+      recursive: true,
+    });
 
-    const imageCache = new Map<string, CachedDownloadedImage>();
+    const imageCache = await loadPersistentImageCache(input.rootDirectory);
     const sharedLeaflets = new Map<string, StoredCarnaubaPlaywrightSharedLeaflet>();
     const stores: StoredCarnaubaPlaywrightStore[] = [];
+    const counters: StorageCounters = {
+      sharedLeafletsCreated: 0,
+      sharedLeafletsReused: 0,
+      sharedImagesDownloaded: 0,
+      sharedImagesReused: 0,
+    };
 
     for (const store of input.result.stores) {
       stores.push(
         await this.storeStore(
           directoryPath,
           sharedLeafletsDirectoryPath,
+          sharedImagesDirectoryPath,
           store,
           imageCache,
           sharedLeaflets,
+          counters,
         ),
       );
     }
@@ -133,6 +169,10 @@ export class LocalCarnaubaPlaywrightLeafletStorage {
       metadataPath,
       sharedLeafletsDirectoryPath,
       sharedLeaflets: storedSharedLeaflets,
+      sharedLeafletsCreated: counters.sharedLeafletsCreated,
+      sharedLeafletsReused: counters.sharedLeafletsReused,
+      sharedImagesDownloaded: counters.sharedImagesDownloaded,
+      sharedImagesReused: counters.sharedImagesReused,
       stores,
     };
 
@@ -147,6 +187,7 @@ export class LocalCarnaubaPlaywrightLeafletStorage {
         2,
       )}\n`,
     );
+    await savePersistentImageCache(input.rootDirectory, imageCache);
 
     return stored;
   }
@@ -154,9 +195,11 @@ export class LocalCarnaubaPlaywrightLeafletStorage {
   private async storeStore(
     extractionDirectoryPath: string,
     sharedLeafletsDirectoryPath: string,
+    sharedImagesDirectoryPath: string,
     extractedStore: CarnaubaPlaywrightExtractedStore,
     imageCache: Map<string, CachedDownloadedImage>,
     sharedLeaflets: Map<string, StoredCarnaubaPlaywrightSharedLeaflet>,
+    counters: StorageCounters,
   ): Promise<StoredCarnaubaPlaywrightStore> {
     const directoryPath = join(
       extractionDirectoryPath,
@@ -171,11 +214,17 @@ export class LocalCarnaubaPlaywrightLeafletStorage {
     const leaflets: StoredCarnaubaPlaywrightLeafletReference[] = [];
 
     for (const leaflet of extractedStore.leaflets) {
-      const preparedLeaflet = await this.prepareLeaflet(leaflet, imageCache);
+      const preparedLeaflet = await this.prepareLeaflet(
+        leaflet,
+        sharedImagesDirectoryPath,
+        imageCache,
+        counters,
+      );
       const sharedLeaflet = await this.ensureSharedLeaflet(
         sharedLeafletsDirectoryPath,
         preparedLeaflet,
         sharedLeaflets,
+        counters,
       );
       leaflets.push(
         await storeLeafletReference(leafletsDirectoryPath, preparedLeaflet, sharedLeaflet),
@@ -212,12 +261,14 @@ export class LocalCarnaubaPlaywrightLeafletStorage {
 
   private async prepareLeaflet(
     leaflet: ExtractedLeaflet,
+    sharedImagesDirectoryPath: string,
     imageCache: Map<string, CachedDownloadedImage>,
+    counters: StorageCounters,
   ): Promise<PreparedLeaflet> {
     const images: PreparedLeafletImage[] = [];
 
     for (const image of leaflet.images) {
-      images.push(await this.prepareImage(image, imageCache));
+      images.push(await this.prepareImage(image, sharedImagesDirectoryPath, imageCache, counters));
     }
 
     return {
@@ -229,34 +280,50 @@ export class LocalCarnaubaPlaywrightLeafletStorage {
 
   private async prepareImage(
     image: ExtractedLeafletImage,
+    sharedImagesDirectoryPath: string,
     imageCache: Map<string, CachedDownloadedImage>,
+    counters: StorageCounters,
   ): Promise<PreparedLeafletImage> {
     const canonicalUrl = canonicalizeLeafletImageUrl(image.imageUrl);
     const cachedImage = imageCache.get(canonicalUrl);
 
     if (cachedImage !== undefined) {
+      counters.sharedImagesReused += 1;
+
       return {
         order: image.order,
         sourceUrl: image.imageUrl,
         canonicalUrl,
-        downloadedImage: cachedImage.downloadedImage,
+        filePath: cachedImage.filePath,
+        contentType: cachedImage.contentType,
+        byteLength: cachedImage.byteLength,
         contentHash: cachedImage.contentHash,
       };
     }
 
     const downloadedImage = await this.httpClient.downloadImage(image.imageUrl);
     const contentHash = createHash('sha256').update(downloadedImage.body).digest('hex');
+    const filePath = join(
+      sharedImagesDirectoryPath,
+      `${contentHash}.${getImageExtension(downloadedImage.contentType)}`,
+    );
+    await writeFile(filePath, downloadedImage.body);
     imageCache.set(canonicalUrl, {
       canonicalUrl,
-      downloadedImage,
+      filePath,
+      contentType: downloadedImage.contentType,
+      byteLength: downloadedImage.body.byteLength,
       contentHash,
     });
+    counters.sharedImagesDownloaded += 1;
 
     return {
       order: image.order,
       sourceUrl: image.imageUrl,
       canonicalUrl,
-      downloadedImage,
+      filePath,
+      contentType: downloadedImage.contentType,
+      byteLength: downloadedImage.body.byteLength,
       contentHash,
     };
   }
@@ -265,14 +332,25 @@ export class LocalCarnaubaPlaywrightLeafletStorage {
     sharedLeafletsDirectoryPath: string,
     preparedLeaflet: PreparedLeaflet,
     sharedLeaflets: Map<string, StoredCarnaubaPlaywrightSharedLeaflet>,
+    counters: StorageCounters,
   ): Promise<StoredCarnaubaPlaywrightSharedLeaflet> {
     const existingSharedLeaflet = sharedLeaflets.get(preparedLeaflet.contentSignature);
 
     if (existingSharedLeaflet !== undefined) {
+      counters.sharedLeafletsReused += 1;
       return existingSharedLeaflet;
     }
 
     const directoryPath = join(sharedLeafletsDirectoryPath, preparedLeaflet.contentSignature);
+    const metadataPath = join(directoryPath, 'metadata.json');
+    const persistedSharedLeaflet = await loadStoredSharedLeaflet(metadataPath);
+
+    if (persistedSharedLeaflet !== null) {
+      sharedLeaflets.set(preparedLeaflet.contentSignature, persistedSharedLeaflet);
+      counters.sharedLeafletsReused += 1;
+      return persistedSharedLeaflet;
+    }
+
     await mkdir(directoryPath, {
       recursive: true,
     });
@@ -280,10 +358,9 @@ export class LocalCarnaubaPlaywrightLeafletStorage {
     const images: StoredCarnaubaPlaywrightLeafletImage[] = [];
 
     for (const image of preparedLeaflet.images) {
-      images.push(await storeSharedLeafletImage(directoryPath, image));
+      images.push(storeSharedLeafletImage(image));
     }
 
-    const metadataPath = join(directoryPath, 'metadata.json');
     const sharedLeaflet = {
       contentSignature: preparedLeaflet.contentSignature,
       representativeLeafletId: preparedLeaflet.leaflet.leafletId,
@@ -295,29 +372,22 @@ export class LocalCarnaubaPlaywrightLeafletStorage {
 
     await writeFile(metadataPath, `${JSON.stringify(sharedLeaflet, null, 2)}\n`);
     sharedLeaflets.set(preparedLeaflet.contentSignature, sharedLeaflet);
+    counters.sharedLeafletsCreated += 1;
 
     return sharedLeaflet;
   }
 }
 
-async function storeSharedLeafletImage(
-  sharedLeafletDirectoryPath: string,
+function storeSharedLeafletImage(
   image: PreparedLeafletImage,
-): Promise<StoredCarnaubaPlaywrightLeafletImage> {
-  const filePath = join(
-    sharedLeafletDirectoryPath,
-    `${image.order.toString().padStart(3, '0')}.${getImageExtension(image.downloadedImage.contentType)}`,
-  );
-
-  await writeFile(filePath, image.downloadedImage.body);
-
+): StoredCarnaubaPlaywrightLeafletImage {
   return {
     order: image.order,
     sourceUrl: image.sourceUrl,
     canonicalUrl: image.canonicalUrl,
-    filePath,
-    contentType: image.downloadedImage.contentType,
-    byteLength: image.downloadedImage.body.byteLength,
+    filePath: image.filePath,
+    contentType: image.contentType,
+    byteLength: image.byteLength,
     contentHash: image.contentHash,
   };
 }
@@ -374,11 +444,7 @@ function buildExtractionDirectoryPath(
   rootDirectory: string,
   result: CarnaubaPlaywrightExtractionResult,
 ): string {
-  const trimmedRoot = rootDirectory.trim();
-
-  if (trimmedRoot.length === 0) {
-    throw new CarnaubaPlaywrightLeafletStorageError('rootDirectory cannot be blank.');
-  }
+  const trimmedRoot = validateRootDirectory(rootDirectory);
 
   if (!Number.isFinite(Date.parse(result.extractedAtIso))) {
     throw new CarnaubaPlaywrightLeafletStorageError('extractedAtIso must be a valid ISO date.');
@@ -389,6 +455,83 @@ function buildExtractionDirectoryPath(
   const extractionHourMinute = extractedAtIso.slice(11, 16).replace(':', '-');
 
   return join(trimmedRoot, 'carnauba', extractionDate, extractionHourMinute);
+}
+
+function buildSharedLeafletsDirectoryPath(rootDirectory: string): string {
+  return join(validateRootDirectory(rootDirectory), 'carnauba', 'shared-leaflets');
+}
+
+function buildSharedImagesDirectoryPath(rootDirectory: string): string {
+  return join(validateRootDirectory(rootDirectory), 'carnauba', 'shared-images');
+}
+
+function buildSharedImagesIndexPath(rootDirectory: string): string {
+  return join(buildSharedImagesDirectoryPath(rootDirectory), 'index.json');
+}
+
+async function loadPersistentImageCache(
+  rootDirectory: string,
+): Promise<Map<string, CachedDownloadedImage>> {
+  const indexPath = buildSharedImagesIndexPath(rootDirectory);
+
+  try {
+    const parsed = JSON.parse(await readFile(indexPath, 'utf8')) as PersistentImageIndex;
+    return new Map(
+      parsed.images.map((image) => [
+        image.canonicalUrl,
+        {
+          canonicalUrl: image.canonicalUrl,
+          filePath: image.filePath,
+          contentType: image.contentType,
+          byteLength: image.byteLength,
+          contentHash: image.contentHash,
+        },
+      ]),
+    );
+  } catch {
+    return new Map();
+  }
+}
+
+async function savePersistentImageCache(
+  rootDirectory: string,
+  imageCache: Map<string, CachedDownloadedImage>,
+): Promise<void> {
+  const indexPath = buildSharedImagesIndexPath(rootDirectory);
+  const index: PersistentImageIndex = {
+    version: 1,
+    images: [...imageCache.values()].map((image) => ({
+      canonicalUrl: image.canonicalUrl,
+      filePath: image.filePath,
+      contentType: image.contentType,
+      byteLength: image.byteLength,
+      contentHash: image.contentHash,
+    })),
+  };
+
+  await writeFile(indexPath, `${JSON.stringify(index, null, 2)}\n`);
+}
+
+async function loadStoredSharedLeaflet(
+  metadataPath: string,
+): Promise<StoredCarnaubaPlaywrightSharedLeaflet | null> {
+  try {
+    return JSON.parse(
+      await readFile(metadataPath, 'utf8'),
+    ) as StoredCarnaubaPlaywrightSharedLeaflet;
+  } catch {
+    return null;
+  }
+}
+
+function validateRootDirectory(rootDirectory: string): string {
+  const trimmedRoot = rootDirectory.trim();
+
+  if (trimmedRoot.length === 0) {
+    throw new CarnaubaPlaywrightLeafletStorageError('rootDirectory cannot be blank.');
+  }
+
+  return trimmedRoot;
 }
 
 function slugify(value: string): string {

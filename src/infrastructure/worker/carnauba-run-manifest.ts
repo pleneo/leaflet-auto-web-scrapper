@@ -49,6 +49,7 @@ export interface CarnaubaRunManifest {
   readonly imagesFound: number;
   readonly sharedLeafletsStored: number;
   readonly sharedImagesStored: number;
+  readonly sharedImagesReused: number;
   readonly visualDataset: CarnaubaRunManifestVisualDatasetSummary;
   readonly stores: readonly CarnaubaRunManifestStoreSummary[];
 }
@@ -111,10 +112,8 @@ export function createCarnaubaRunManifest(input: CarnaubaRunManifestInput): Carn
     leafletsFound: stores.reduce((total, store) => total + store.leafletsFound, 0),
     imagesFound: stores.reduce((total, store) => total + store.imagesFound, 0),
     sharedLeafletsStored: input.stored.sharedLeaflets.length,
-    sharedImagesStored: input.stored.sharedLeaflets.reduce(
-      (total, leaflet) => total + leaflet.images.length,
-      0,
-    ),
+    sharedImagesStored: input.stored.sharedImagesDownloaded,
+    sharedImagesReused: input.stored.sharedImagesReused,
     visualDataset: input.visualDataset,
     stores,
   };
