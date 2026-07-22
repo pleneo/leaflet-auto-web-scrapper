@@ -127,9 +127,20 @@ export class CarnaubaPlaywrightExtractionService {
         continue;
       }
 
+      if (result.leaflets.length === 0) {
+        this.logger.info('No Carnauba leaflets found for store.', {
+          storeId: store.storeId,
+          storeName: store.name,
+          sourceUrl,
+          attempts: result.attempts,
+        });
+      }
+
       this.logger.info('Finished Carnauba Playwright store extraction.', {
         storeId: store.storeId,
+        storeName: store.name,
         leaflets: result.leaflets.length,
+        images: result.leaflets.reduce((total, leaflet) => total + leaflet.images.length, 0),
         attempts: result.attempts,
       });
 

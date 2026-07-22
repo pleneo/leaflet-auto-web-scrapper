@@ -200,6 +200,38 @@ describe('CarnaubaPlaywrightExtractionService', () => {
     expect(result.failedStores).toEqual([]);
   });
 
+  it('logs when a store has no leaflets available', async () => {
+    const logger = new FakeLogger();
+    const service = new CarnaubaPlaywrightExtractionService(
+      new FakeStoreCatalogProvider(createStores().slice(0, 1)),
+      new FakeStoreSnapshotCache(null),
+      new FakeSingleStoreExtractor({
+        emptyStoreIds: [79],
+      }),
+      new FixedClock('2026-07-20T15:59:00.000Z'),
+      logger,
+    );
+
+    const result = await service.extract({
+      brandId: 27,
+      storeCacheTtlMs: 86_400_000,
+      siteBaseUrl: 'https://carnaubasupermercados.com.br',
+      viewport: createVisualViewport({ width: 1366, height: 768, deviceScaleFactor: 1 }),
+      timeoutMs: 30_000,
+      storeTimeoutMs: 60_000,
+      maxStoreAttempts: 2,
+      settleDelayMs: 5_000,
+    });
+
+    expect(result.stores[0]?.leaflets).toEqual([]);
+    expect(logger.info).toHaveBeenCalledWith('No Carnauba leaflets found for store.', {
+      storeId: 79,
+      storeName: 'Maestro',
+      sourceUrl: 'https://carnaubasupermercados.com.br/loja/79/encartes',
+      attempts: 1,
+    });
+  });
+
   it('fails a store when the store timeout is reached', async () => {
     const service = new CarnaubaPlaywrightExtractionService(
       new FakeStoreCatalogProvider(createStores().slice(0, 1)),
@@ -412,6 +444,7 @@ class FailingStoreCatalogProvider implements CarnaubaStoreCatalogProvider {
 }
 
 interface FakeSingleStoreExtractorConfig {
+  readonly emptyStoreIds?: readonly number[];
   readonly failingStoreIds?: readonly number[];
   readonly hangingStoreIds?: readonly number[];
   readonly transientFailuresByStoreId?: readonly {
@@ -429,11 +462,14 @@ class FakeSingleStoreExtractor implements SingleStoreCarnaubaLeafletExtractor {
 
   private readonly failingStoreIds: readonly number[];
 
+  private readonly emptyStoreIds: readonly number[];
+
   private readonly hangingStoreIds: readonly number[];
 
   private readonly remainingTransientFailures = new Map<number, number>();
 
   constructor(config: FakeSingleStoreExtractorConfig = {}) {
+    this.emptyStoreIds = config.emptyStoreIds ?? [];
     this.failingStoreIds = config.failingStoreIds ?? [];
     this.hangingStoreIds = config.hangingStoreIds ?? [];
 
@@ -442,17 +478,9 @@ class FakeSingleStoreExtractor implements SingleStoreCarnaubaLeafletExtractor {
     }
   }
 
-  extract(input: Parameters<SingleStoreCarnaubaLeafletExtractor['extract']>[0]): Promise<{
-    readonly leaflets: readonly [
-      {
-        readonly leafletId: string;
-        readonly title: string;
-        readonly cardIndex: number;
-        readonly coverImageUrl: string;
-        readonly images: readonly [{ readonly order: number; readonly imageUrl: string }];
-      },
-    ];
-  }> {
+  extract(
+    input: Parameters<SingleStoreCarnaubaLeafletExtractor['extract']>[0],
+  ): ReturnType<SingleStoreCarnaubaLeafletExtractor['extract']> {
     this.receivedInputs.push(input);
     this.homeUrls.push(input.homeUrl);
     this.sourceUrls.push(input.sourceUrl);
@@ -471,6 +499,12 @@ class FakeSingleStoreExtractor implements SingleStoreCarnaubaLeafletExtractor {
     if (remainingTransientFailures > 0) {
       this.remainingTransientFailures.set(storeId, remainingTransientFailures - 1);
       return Promise.reject(new Error(`Store ${String(storeId)} transient failure.`));
+    }
+
+    if (this.emptyStoreIds.includes(storeId)) {
+      return Promise.resolve({
+        leaflets: [],
+      });
     }
 
     return Promise.resolve({

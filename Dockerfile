@@ -18,4 +18,4 @@ COPY src ./src
 
 RUN npm run build
 
-CMD ["npm", "run", "worker:carnauba"]
+CMD ["npm", "run", "worker"]

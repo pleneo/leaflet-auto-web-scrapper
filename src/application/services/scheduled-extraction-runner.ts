@@ -167,7 +167,23 @@ export class ScheduledExtractionRunner {
           targetId: target.targetId,
           attempt,
           runId,
+          status: output.status,
+          leafletsFound: output.leafletsFound,
+          artifactsDownloaded: output.artifactsDownloaded,
+          artifactsReused: output.artifactsReused,
+          datasetSamplesCreated: output.datasetSamplesCreated,
+          failures: output.failures.length,
         });
+
+        if (output.artifactsDownloaded === 0) {
+          this.logger.info('Extraction target completed without new leaflet artifacts.', {
+            targetId: target.targetId,
+            supermarketId: target.supermarketId,
+            runId,
+            leafletsFound: output.leafletsFound,
+            artifactsReused: output.artifactsReused,
+          });
+        }
 
         return {
           status: 'succeeded',
