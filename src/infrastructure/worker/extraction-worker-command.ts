@@ -19,9 +19,8 @@ import { MercadappCarnaubaApiClient } from '../scrapers/carnauba/mercadapp-api-c
 import { PlaywrightCarnaubaLeafletPageFactory } from '../scrapers/carnauba/playwright-carnauba-leaflet-page.factory';
 import { PlaywrightMercadappAuthTokenProvider } from '../scrapers/carnauba/playwright-mercadapp-auth-token-provider';
 import { StoreSnapshotCache } from '../scrapers/carnauba/store-snapshot-cache';
-import { PlaywrightSuperDoPovoAuthTokenProvider } from '../scrapers/superdopovo/playwright-superdopovo-auth-token-provider';
+import { PlaywrightSuperDoPovoApiClient } from '../scrapers/superdopovo/playwright-superdopovo-api-client';
 import { PlaywrightSuperDoPovoLeafletPageFactory } from '../scrapers/superdopovo/playwright-superdopovo-leaflet-page.factory';
-import { SuperDoPovoApiClient } from '../scrapers/superdopovo/superdopovo-api-client';
 import { SuperDoPovoLeafletExtractor } from '../scrapers/superdopovo/superdopovo-leaflet-extractor';
 import { SuperDoPovoPlaywrightExtractionService } from '../scrapers/superdopovo/superdopovo-playwright-extraction';
 import { SuperDoPovoPlaywrightStrategyAdapter } from '../scrapers/superdopovo/superdopovo-playwright-strategy-adapter';
@@ -187,13 +186,10 @@ function createSuperDoPovoStrategy(
   clock: SystemClock,
   logger: Logger,
 ): SuperDoPovoPlaywrightStrategyAdapter {
-  const authTokenProvider = new PlaywrightSuperDoPovoAuthTokenProvider({
+  const apiClient = new PlaywrightSuperDoPovoApiClient({
     bootstrapUrl: `${options.siteBaseUrl.replace(/\/+$/, '')}/booklets`,
+    apiBaseUrl: options.apiBaseUrl,
     timeoutMs: options.timeoutMs,
-  });
-  const apiClient = new SuperDoPovoApiClient({
-    baseUrl: options.apiBaseUrl,
-    authTokenProvider,
   });
   const visualDatasetCaptureService =
     options.visualDatasetEnabled && visualDatasetRootDirectory.trim().length > 0

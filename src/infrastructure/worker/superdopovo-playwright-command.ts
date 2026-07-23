@@ -6,9 +6,8 @@ import { createExtractionTarget } from '../../domain/extraction/extraction-targe
 import { ConsoleLogger } from '../logging/console-logger';
 import { JsonLogger } from '../logging/json-logger';
 import { FileSystemVisualDatasetSampleRepository } from '../repositories/file-system-visual-dataset-sample-repository';
-import { PlaywrightSuperDoPovoAuthTokenProvider } from '../scrapers/superdopovo/playwright-superdopovo-auth-token-provider';
+import { PlaywrightSuperDoPovoApiClient } from '../scrapers/superdopovo/playwright-superdopovo-api-client';
 import { PlaywrightSuperDoPovoLeafletPageFactory } from '../scrapers/superdopovo/playwright-superdopovo-leaflet-page.factory';
-import { SuperDoPovoApiClient } from '../scrapers/superdopovo/superdopovo-api-client';
 import { SuperDoPovoLeafletExtractor } from '../scrapers/superdopovo/superdopovo-leaflet-extractor';
 import { SuperDoPovoPlaywrightExtractionService } from '../scrapers/superdopovo/superdopovo-playwright-extraction';
 import { SuperDoPovoPlaywrightStrategyAdapter } from '../scrapers/superdopovo/superdopovo-playwright-strategy-adapter';
@@ -37,32 +36,38 @@ async function run(): Promise<void> {
   const startedAtIso = clock.nowIso();
   const runId = `superdopovo-playwright-${startedAtIso.replace(/[:.]/g, '-')}`;
   const visualDatasetRootDirectory = resolve(process.cwd(), options.visualDatasetRootDirectory);
-  const adapter = createStrategy(options, visualDatasetRootDirectory, clock, logger);
-  const output = await adapter.execute({
-    runId,
-    startedAtIso,
-    target: createExtractionTarget({
-      targetId: 'superdopovo',
-      supermarketId: 'superdopovo',
-      supermarketName: 'Super do Povo',
-      mode: 'playwright',
-      enabled: true,
-      intervalMinutes: 60,
-      maxAttempts: 1,
-    }),
-    visualDatasetCapturePolicy: options.visualDatasetEnabled ? 'always' : 'disabled',
-    logger,
-  });
+  const apiClient = createApiClient(options);
 
-  logger.info('Super do Povo Playwright extraction completed.', {
-    status: output.status,
-    shops: output.units.length,
-    leaflets: output.leafletsFound,
-    artifactsDownloaded: output.artifactsDownloaded,
-    artifactsReused: output.artifactsReused,
-    datasetSamplesCreated: output.datasetSamplesCreated,
-    runId,
-  });
+  try {
+    const adapter = createStrategy(options, visualDatasetRootDirectory, clock, logger, apiClient);
+    const output = await adapter.execute({
+      runId,
+      startedAtIso,
+      target: createExtractionTarget({
+        targetId: 'superdopovo',
+        supermarketId: 'superdopovo',
+        supermarketName: 'Super do Povo',
+        mode: 'playwright',
+        enabled: true,
+        intervalMinutes: 60,
+        maxAttempts: 1,
+      }),
+      visualDatasetCapturePolicy: options.visualDatasetEnabled ? 'always' : 'disabled',
+      logger,
+    });
+
+    logger.info('Super do Povo Playwright extraction completed.', {
+      status: output.status,
+      shops: output.units.length,
+      leaflets: output.leafletsFound,
+      artifactsDownloaded: output.artifactsDownloaded,
+      artifactsReused: output.artifactsReused,
+      datasetSamplesCreated: output.datasetSamplesCreated,
+      runId,
+    });
+  } finally {
+    await apiClient.close();
+  }
 }
 
 function createStrategy(
@@ -70,15 +75,8 @@ function createStrategy(
   visualDatasetRootDirectory: string,
   clock: SystemClock,
   logger: Logger,
+  apiClient: PlaywrightSuperDoPovoApiClient,
 ): SuperDoPovoPlaywrightStrategyAdapter {
-  const authTokenProvider = new PlaywrightSuperDoPovoAuthTokenProvider({
-    bootstrapUrl: `${options.siteBaseUrl.replace(/\/+$/, '')}/booklets`,
-    timeoutMs: options.timeoutMs,
-  });
-  const apiClient = new SuperDoPovoApiClient({
-    baseUrl: options.apiBaseUrl,
-    authTokenProvider,
-  });
   const visualDatasetCaptureService =
     options.visualDatasetEnabled && visualDatasetRootDirectory.trim().length > 0
       ? new VisualDatasetCaptureService(
@@ -122,6 +120,16 @@ function createStrategy(
       countVisualDatasetSamples,
     },
   );
+}
+
+function createApiClient(
+  options: ReturnType<typeof parseSuperDoPovoPlaywrightCommandOptions>,
+): PlaywrightSuperDoPovoApiClient {
+  return new PlaywrightSuperDoPovoApiClient({
+    bootstrapUrl: `${options.siteBaseUrl.replace(/\/+$/, '')}/booklets`,
+    apiBaseUrl: options.apiBaseUrl,
+    timeoutMs: options.timeoutMs,
+  });
 }
 
 function createLogger(env: Readonly<Record<string, string | undefined>>): Logger {
