@@ -44,11 +44,53 @@ export interface CarnaubaHomeLeafletsLinkVisualDatasetSubject {
   readonly storeName: string;
 }
 
+export interface SuperDoPovoSectionsMenuVisualDatasetSubject {
+  readonly subjectKind: 'superdopovo-sections-menu';
+}
+
+export interface SuperDoPovoLeafletsLinkVisualDatasetSubject {
+  readonly subjectKind: 'superdopovo-leaflets-link';
+}
+
+export interface SuperDoPovoLeafletCardVisualDatasetSubject {
+  readonly subjectKind: 'superdopovo-leaflet-card';
+  readonly shopId: number;
+  readonly shopName: string;
+  readonly cardIndex: number;
+  readonly bookletId: number;
+  readonly bookletTitle: string;
+}
+
+export interface SuperDoPovoLeafletImageVisualDatasetSubject {
+  readonly subjectKind: 'superdopovo-leaflet-image';
+  readonly shopId: number;
+  readonly shopName: string;
+  readonly cardIndex: number;
+  readonly bookletId: number;
+  readonly bookletTitle: string;
+  readonly imageIndex: number;
+  readonly imageUrl: string;
+}
+
+export interface SuperDoPovoLeafletModalCloseVisualDatasetSubject {
+  readonly subjectKind: 'superdopovo-leaflet-modal-close';
+  readonly shopId: number;
+  readonly shopName: string;
+  readonly cardIndex: number;
+  readonly bookletId: number;
+  readonly bookletTitle: string;
+}
+
 export type VisualDatasetSubject =
   | CarnaubaHomeLeafletsLinkVisualDatasetSubject
   | CarnaubaLeafletCardVisualDatasetSubject
   | CarnaubaLeafletImageVisualDatasetSubject
-  | CarnaubaLeafletModalCloseVisualDatasetSubject;
+  | CarnaubaLeafletModalCloseVisualDatasetSubject
+  | SuperDoPovoSectionsMenuVisualDatasetSubject
+  | SuperDoPovoLeafletsLinkVisualDatasetSubject
+  | SuperDoPovoLeafletCardVisualDatasetSubject
+  | SuperDoPovoLeafletImageVisualDatasetSubject
+  | SuperDoPovoLeafletModalCloseVisualDatasetSubject;
 
 export interface VisualDatasetSample {
   readonly sampleId: string;

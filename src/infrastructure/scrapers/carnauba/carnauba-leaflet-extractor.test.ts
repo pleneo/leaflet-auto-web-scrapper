@@ -538,6 +538,8 @@ function createCaptureEventName(subject: CaptureVisualDatasetSampleInput['subjec
       return `capture-image-${String(subject.cardIndex)}-${String(subject.imageIndex)}`;
     case 'carnauba-leaflet-modal-close':
       return `capture-close-${String(subject.cardIndex)}`;
+    default:
+      throw new Error(`Unsupported capture subject ${subject.subjectKind}.`);
   }
 }
 
