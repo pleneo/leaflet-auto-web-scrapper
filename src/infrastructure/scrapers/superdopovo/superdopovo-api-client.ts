@@ -92,9 +92,9 @@ export class SuperDoPovoApiClient
       );
     }
 
-    const json = (await response.json()) as readonly TResponse[] | object | null;
+    const json = (await response.json()) as readonly TResponse[];
 
-    if (!Array.isArray(json)) {
+    if (Object.prototype.toString.call(json) !== '[object Array]') {
       throw new Error(`Expected Super do Povo response at ${path} to be an array.`);
     }
 
