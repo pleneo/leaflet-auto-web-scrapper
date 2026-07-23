@@ -81,6 +81,9 @@ describe('parseSuperDoPovoPlaywrightCommandOptions', () => {
       InvalidSuperDoPovoPlaywrightCommandOptionsError,
     );
     expect(() =>
+      parseSuperDoPovoPlaywrightCommandOptions(['--superdopovo-api-base-url'], {}),
+    ).toThrow(InvalidSuperDoPovoPlaywrightCommandOptionsError);
+    expect(() =>
       parseSuperDoPovoPlaywrightCommandOptions(['--superdopovo-site-base-url', 'invalid'], {}),
     ).toThrow(InvalidSuperDoPovoPlaywrightCommandOptionsError);
     expect(() =>
@@ -90,10 +93,13 @@ describe('parseSuperDoPovoPlaywrightCommandOptions', () => {
       parseSuperDoPovoPlaywrightCommandOptions(['--superdopovo-output-root', ' '], {}),
     ).toThrow(InvalidSuperDoPovoPlaywrightCommandOptionsError);
     expect(() =>
-      parseSuperDoPovoPlaywrightCommandOptions(
-        ['--superdopovo-visual-dataset-enabled', 'yes'],
-        {},
-      ),
+      parseSuperDoPovoPlaywrightCommandOptions(['--superdopovo-device-scale-factor', '0'], {}),
+    ).toThrow(InvalidSuperDoPovoPlaywrightCommandOptionsError);
+    expect(() =>
+      parseSuperDoPovoPlaywrightCommandOptions(['--superdopovo-settle-delay-ms', '-1'], {}),
+    ).toThrow(InvalidSuperDoPovoPlaywrightCommandOptionsError);
+    expect(() =>
+      parseSuperDoPovoPlaywrightCommandOptions(['--superdopovo-visual-dataset-enabled', 'yes'], {}),
     ).toThrow(InvalidSuperDoPovoPlaywrightCommandOptionsError);
     expect(() =>
       parseSuperDoPovoPlaywrightCommandOptions(['--superdopovo-visual-dataset-split', 'bad'], {}),

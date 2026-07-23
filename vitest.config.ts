@@ -36,6 +36,7 @@ export default defineConfig({
         'src/infrastructure/worker/carnauba-leaflets-smoke-command.ts',
         'src/infrastructure/worker/carnauba-playwright-command.ts',
         'src/infrastructure/worker/extraction-worker-command.ts',
+        'src/infrastructure/worker/superdopovo-playwright-command.ts',
         'src/infrastructure/worker/visual-dataset-validate-command.ts',
         'src/infrastructure/worker/visual-capture-smoke-command.ts',
         'src/main.tsx',
