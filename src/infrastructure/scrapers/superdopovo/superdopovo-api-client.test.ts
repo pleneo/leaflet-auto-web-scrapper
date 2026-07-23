@@ -27,10 +27,14 @@ describe('SuperDoPovoApiClient', () => {
         },
       },
     ]);
-    expect(fetch).toHaveBeenCalledWith('https://loja.superdopovo.com.br/api/v1/shops/addresses', {
-      headers: expect.objectContaining({
-        Authorization: 'Bearer token',
-      }),
+    const fetchMock = vi.mocked(fetch);
+    const requestInit = fetchMock.mock.calls[0]?.[1];
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      'https://loja.superdopovo.com.br/api/v1/shops/addresses',
+    );
+    expect(requestInit?.headers).toMatchObject({
+      Authorization: 'Bearer token',
     });
   });
 
@@ -50,6 +54,71 @@ describe('SuperDoPovoApiClient', () => {
         coverImageUrl: 'https://cdn.example.com/cover.jpeg',
         imageUrls: ['https://cdn.example.com/cover.jpeg', 'https://cdn.example.com/sheet.jpeg'],
         shopId: 24,
+      },
+    ]);
+  });
+
+  it('uses fallback values for optional booklet fields', async () => {
+    vi.stubGlobal(
+      'fetch',
+      createFetch(
+        JSON.stringify([
+          {
+            id: 1609,
+            name: 'Daily booklet',
+            link: 'https://cdn.example.com/daily.jpeg',
+          },
+        ]),
+      ),
+    );
+    const client = new SuperDoPovoApiClient({
+      baseUrl: 'https://loja.superdopovo.com.br/api/v1',
+      authTokenProvider: new FixedAuthTokenProvider(),
+    });
+
+    await expect(client.listBooklets(57)).resolves.toEqual([
+      {
+        bookletId: 1609,
+        name: 'Daily booklet',
+        startDateIso: null,
+        endDateIso: null,
+        coverImageUrl: 'https://cdn.example.com/daily.jpeg',
+        imageUrls: ['https://cdn.example.com/daily.jpeg'],
+        shopId: 57,
+      },
+    ]);
+  });
+
+  it('uses blank address values when optional shop address fields are absent', async () => {
+    vi.stubGlobal(
+      'fetch',
+      createFetch(
+        JSON.stringify([
+          {
+            id: 57,
+            name: 'Cambeba',
+            address: {},
+          },
+        ]),
+      ),
+    );
+    const client = new SuperDoPovoApiClient({
+      baseUrl: 'https://loja.superdopovo.com.br/api/v1',
+      authTokenProvider: new FixedAuthTokenProvider(),
+    });
+
+    await expect(client.listShops()).resolves.toEqual([
+      {
+        shopId: 57,
+        name: 'Cambeba',
+        address: {
+          zipcode: '',
+          street: '',
+          number: '',
+          neighborhood: '',
+          city: '',
+          state: '',
+        },
       },
     ]);
   });
