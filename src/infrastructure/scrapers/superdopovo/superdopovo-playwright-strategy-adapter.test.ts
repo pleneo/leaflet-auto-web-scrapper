@@ -111,6 +111,58 @@ describe('SuperDoPovoPlaywrightStrategyAdapter', () => {
     expect(output.datasetSamplesCreated).toBe(0);
     expect(extractionService.inputs[0]?.visualDataset).toBeUndefined();
   });
+
+  it('maps empty units and fully failed extractions', async () => {
+    const storedExtraction = createStoredExtraction();
+    const storedUnit = storedExtraction.units[0];
+
+    if (storedUnit === undefined) {
+      throw new Error('Expected stored unit fixture.');
+    }
+
+    const adapter = createAdapter({
+      extractionService: new FakeExtractionService({
+        ...createExtractionResult(),
+        shops: [],
+      }),
+      storage: new FakeStorage({
+        ...storedExtraction,
+        units: [
+          {
+            ...storedUnit,
+            leaflets: [],
+          },
+        ],
+        sharedLeaflets: [],
+      }),
+      countVisualDatasetSamples: vi.fn(() => Promise.resolve(0)),
+    });
+
+    const output = await adapter.execute(createInput('disabled'));
+
+    expect(output.status).toBe('failed');
+    expect(output.units[0]?.status).toBe('empty');
+    expect(output.units[0]?.leaflets).toEqual([]);
+  });
+
+  it('uses zero image count when shared leaflet metadata is missing', async () => {
+    const adapter = createAdapter({
+      extractionService: new FakeExtractionService({
+        ...createExtractionResult(),
+        failedShops: [],
+      }),
+      storage: new FakeStorage({
+        ...createStoredExtraction(),
+        sharedLeaflets: [],
+      }),
+      countVisualDatasetSamples: vi.fn(() => Promise.resolve(0)),
+    });
+
+    const output = await adapter.execute(createInput('disabled'));
+
+    expect(output.status).toBe('succeeded');
+    expect(output.units[0]?.leaflets[0]?.imageCount).toBe(0);
+  });
 });
 
 function createAdapter(input: {

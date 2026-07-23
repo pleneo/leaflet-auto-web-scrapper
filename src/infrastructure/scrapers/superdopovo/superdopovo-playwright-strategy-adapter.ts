@@ -23,9 +23,7 @@ export interface SuperDoPovoPlaywrightExtractionPort {
 }
 
 export interface SuperDoPovoPlaywrightStoragePort {
-  store(
-    input: StoreSharedImageGalleryExtractionInput,
-  ): Promise<StoredSharedImageGalleryExtraction>;
+  store(input: StoreSharedImageGalleryExtractionInput): Promise<StoredSharedImageGalleryExtraction>;
 }
 
 export interface SuperDoPovoPlaywrightStrategyAdapterConfig {

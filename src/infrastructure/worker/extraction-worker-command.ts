@@ -87,12 +87,7 @@ async function run(): Promise<void> {
       ]),
       strategyRegistry: new PlaywrightStrategyRegistry([
         createCarnaubaStrategy(carnaubaOptions, visualDatasetRootDirectory, clock, logger),
-        createSuperDoPovoStrategy(
-          superDoPovoOptions,
-          visualDatasetRootDirectory,
-          clock,
-          logger,
-        ),
+        createSuperDoPovoStrategy(superDoPovoOptions, visualDatasetRootDirectory, clock, logger),
       ]),
       lock: new InMemoryExtractionLock(),
       stateService: new ExtractionStateService(
