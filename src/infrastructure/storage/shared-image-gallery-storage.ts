@@ -102,6 +102,13 @@ interface PersistentSharedImageIndex {
   readonly images: readonly CachedSharedImage[];
 }
 
+type JsonPrimitive = string | number | boolean | null;
+type JsonValue = JsonPrimitive | JsonObject | readonly JsonValue[];
+
+interface JsonObject {
+  readonly [key: string]: JsonValue | undefined;
+}
+
 export class SharedImageGalleryStorageError extends Error {
   constructor(message: string) {
     super(message);
@@ -236,11 +243,11 @@ export class LocalSharedImageGalleryStorage {
   ): Promise<PreparedSharedImageGalleryLeaflet> {
     const images: StoredSharedImageGalleryImage[] = [];
 
-    for (let index = 0; index < leaflet.imageUrls.length; index += 1) {
+    for (const [index, imageUrl] of leaflet.imageUrls.entries()) {
       images.push(
         await this.prepareImage(
           index + 1,
-          leaflet.imageUrls[index] ?? '',
+          imageUrl,
           sharedImagesDirectoryPath,
           imageCache,
           counters,
@@ -377,16 +384,89 @@ async function loadPersistentImageCache(
   try {
     const parsed = JSON.parse(
       await readFile(buildSharedImagesIndexPath(input), 'utf8'),
-    ) as PersistentSharedImageIndex;
+    ) as JsonValue;
 
-    if (parsed.version !== 1 || !Array.isArray(parsed.images)) {
+    const index = parsePersistentSharedImageIndex(parsed);
+
+    if (index === null) {
       return new Map();
     }
 
-    return new Map(parsed.images.map((image) => [image.canonicalUrl, image]));
+    return new Map(index.images.map((image) => [image.canonicalUrl, image]));
   } catch {
     return new Map();
   }
+}
+
+function parsePersistentSharedImageIndex(value: JsonValue): PersistentSharedImageIndex | null {
+  if (!isJsonObject(value) || value['version'] !== 1) {
+    return null;
+  }
+
+  const imageValues = value['images'];
+
+  if (!isJsonArray(imageValues)) {
+    return null;
+  }
+
+  const images: CachedSharedImage[] = [];
+
+  for (const imageValue of imageValues) {
+    const image = parseCachedSharedImage(imageValue);
+
+    if (image === null) {
+      return null;
+    }
+
+    images.push(image);
+  }
+
+  return {
+    version: 1,
+    images,
+  };
+}
+
+function parseCachedSharedImage(value: JsonValue): CachedSharedImage | null {
+  if (!isJsonObject(value)) {
+    return null;
+  }
+
+  const canonicalUrl = value['canonicalUrl'];
+  const filePath = value['filePath'];
+  const contentType = value['contentType'];
+  const byteLength = value['byteLength'];
+  const contentHash = value['contentHash'];
+
+  if (
+    typeof canonicalUrl !== 'string' ||
+    typeof filePath !== 'string' ||
+    !isLeafletImageContentType(contentType) ||
+    typeof byteLength !== 'number' ||
+    typeof contentHash !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    canonicalUrl,
+    filePath,
+    contentType,
+    byteLength,
+    contentHash,
+  };
+}
+
+function isJsonObject(value: JsonValue): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isJsonArray(value: JsonValue | undefined): value is readonly JsonValue[] {
+  return Array.isArray(value);
+}
+
+function isLeafletImageContentType(value: JsonValue | undefined): value is LeafletImageContentType {
+  return value === 'image/jpeg' || value === 'image/png' || value === 'image/webp';
 }
 
 async function savePersistentImageCache(
