@@ -28,6 +28,7 @@ export default defineConfig({
         'src/infrastructure/scrapers/carnauba/carnauba-leaflet-page.ts',
         'src/infrastructure/scrapers/carnauba/playwright-carnauba-leaflet-page.factory.ts',
         'src/infrastructure/scrapers/carnauba/playwright-mercadapp-auth-token-provider.ts',
+        'src/infrastructure/scrapers/superdopovo/superdopovo-api-types.ts',
         'src/infrastructure/storage/fetch-leaflet-image-http-client.ts',
         'src/infrastructure/worker/carnauba-api-extract-command.ts',
         'src/infrastructure/worker/carnauba-leaflets-smoke-command.ts',
