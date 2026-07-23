@@ -20,7 +20,25 @@ export interface PlaywrightExtractionOutput {
   readonly artifactsDownloaded: number;
   readonly artifactsReused: number;
   readonly datasetSamplesCreated: number;
+  readonly units: readonly PlaywrightExtractionUnitOutput[];
   readonly failures: readonly PlaywrightExtractionFailure[];
+}
+
+export interface PlaywrightExtractionUnitOutput {
+  readonly unitId: string;
+  readonly unitName: string;
+  readonly status: 'succeeded' | 'failed' | 'empty';
+  readonly sourceUrl: string;
+  readonly leaflets: readonly PlaywrightExtractionLeafletOutput[];
+  readonly errorMessage: string | null;
+}
+
+export interface PlaywrightExtractionLeafletOutput {
+  readonly leafletKey: string;
+  readonly title: string;
+  readonly contentSignature: string;
+  readonly imageCount: number;
+  readonly sourceUrl: string;
 }
 
 export interface PlaywrightExtractionFailure {

@@ -2,6 +2,7 @@ import { readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { Logger } from '../../application/ports/logger';
 import { InMemoryExtractionLock } from '../../application/services/extraction-lock';
+import { ExtractionStateService } from '../../application/services/extraction-state-service';
 import { ExtractionTargetRegistry } from '../../application/services/extraction-target-registry';
 import { PlaywrightStrategyRegistry } from '../../application/services/playwright-strategy-registry';
 import { ScheduledExtractionRunner } from '../../application/services/scheduled-extraction-runner';
@@ -9,6 +10,7 @@ import { createExtractionTarget } from '../../domain/extraction/extraction-targe
 import { VisualDatasetCaptureService } from '../../application/services/visual-dataset-capture-service';
 import { ConsoleLogger } from '../logging/console-logger';
 import { JsonLogger } from '../logging/json-logger';
+import { FileSystemExtractionStateRepository } from '../repositories/file-system-extraction-state-repository';
 import { FileSystemVisualDatasetSampleRepository } from '../repositories/file-system-visual-dataset-sample-repository';
 import { CarnaubaLeafletExtractor } from '../scrapers/carnauba/carnauba-leaflet-extractor';
 import { CarnaubaPlaywrightExtractionService } from '../scrapers/carnauba/carnauba-playwright-extraction';
@@ -66,6 +68,11 @@ async function run(): Promise<void> {
         createCarnaubaStrategy(carnaubaOptions, visualDatasetRootDirectory, clock, logger),
       ]),
       lock: new InMemoryExtractionLock(),
+      stateService: new ExtractionStateService(
+        new FileSystemExtractionStateRepository({
+          rootDirectory: resolve(process.cwd(), workerOptions.stateRootDirectory),
+        }),
+      ),
       clock,
       logger,
       delay,

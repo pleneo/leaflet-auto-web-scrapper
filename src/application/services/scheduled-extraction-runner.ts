@@ -4,6 +4,7 @@ import type { Clock } from '../ports/clock';
 import type { Logger } from '../ports/logger';
 import type { PlaywrightExtractionOutput } from '../ports/playwright-extraction-strategy';
 import type { ExtractionLock } from './extraction-lock';
+import type { ExtractionStateChangeSummary } from './extraction-state-service';
 import type { ExtractionTargetRegistry } from './extraction-target-registry';
 import type { PlaywrightStrategyRegistry } from './playwright-strategy-registry';
 
@@ -18,9 +19,17 @@ export interface ScheduledExtractionRunnerDependencies {
   readonly targetRegistry: ExtractionTargetRegistry;
   readonly strategyRegistry: PlaywrightStrategyRegistry;
   readonly lock: ExtractionLock;
+  readonly stateService: ScheduledExtractionStateService;
   readonly clock: Clock;
   readonly logger: Logger;
   readonly delay: (durationMs: number) => Promise<void>;
+}
+
+export interface ScheduledExtractionStateService {
+  recordOutput(
+    output: PlaywrightExtractionOutput,
+    observedAtIso: string,
+  ): Promise<ExtractionStateChangeSummary>;
 }
 
 export type ScheduledTargetRunResult =
@@ -29,6 +38,7 @@ export type ScheduledTargetRunResult =
       readonly target: ExtractionTarget;
       readonly attempts: number;
       readonly output: PlaywrightExtractionOutput;
+      readonly stateChangeSummary: ExtractionStateChangeSummary;
     }
   | {
       readonly status: 'failed';
@@ -65,6 +75,8 @@ export class ScheduledExtractionRunner {
 
   private readonly lock: ExtractionLock;
 
+  private readonly stateService: ScheduledExtractionStateService;
+
   private readonly clock: Clock;
 
   private readonly logger: Logger;
@@ -80,6 +92,7 @@ export class ScheduledExtractionRunner {
     this.targetRegistry = dependencies.targetRegistry;
     this.strategyRegistry = dependencies.strategyRegistry;
     this.lock = dependencies.lock;
+    this.stateService = dependencies.stateService;
     this.clock = dependencies.clock;
     this.logger = dependencies.logger;
     this.delay = dependencies.delay;
@@ -162,6 +175,10 @@ export class ScheduledExtractionRunner {
           visualDatasetCapturePolicy: this.config.visualDatasetCapturePolicy,
           logger: this.logger,
         });
+        const stateChangeSummary = await this.stateService.recordOutput(
+          output,
+          this.clock.nowIso(),
+        );
 
         this.logger.info('Extraction target attempt completed.', {
           targetId: target.targetId,
@@ -173,6 +190,22 @@ export class ScheduledExtractionRunner {
           artifactsReused: output.artifactsReused,
           datasetSamplesCreated: output.datasetSamplesCreated,
           failures: output.failures.length,
+          stateNewLeaflets: stateChangeSummary.newLeaflets,
+          stateUnchangedLeaflets: stateChangeSummary.unchangedLeaflets,
+          stateRemovedLeaflets: stateChangeSummary.removedLeaflets,
+          stateFailedUnits: stateChangeSummary.failedUnits,
+          stateEmptyUnits: stateChangeSummary.emptyUnits,
+        });
+
+        this.logger.info('Extraction target state updated.', {
+          targetId: target.targetId,
+          runId,
+          unitsProcessed: stateChangeSummary.unitsProcessed,
+          newLeaflets: stateChangeSummary.newLeaflets,
+          unchangedLeaflets: stateChangeSummary.unchangedLeaflets,
+          removedLeaflets: stateChangeSummary.removedLeaflets,
+          failedUnits: stateChangeSummary.failedUnits,
+          emptyUnits: stateChangeSummary.emptyUnits,
         });
 
         if (output.artifactsDownloaded === 0) {
@@ -190,6 +223,7 @@ export class ScheduledExtractionRunner {
           target,
           attempts: attempt,
           output,
+          stateChangeSummary,
         };
       } catch (error) {
         if (error instanceof Error) {

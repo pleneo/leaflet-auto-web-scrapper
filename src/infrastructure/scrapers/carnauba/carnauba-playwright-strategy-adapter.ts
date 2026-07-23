@@ -1,7 +1,9 @@
 import type {
   PlaywrightExtractionInput,
+  PlaywrightExtractionLeafletOutput,
   PlaywrightExtractionOutput,
   PlaywrightExtractionStrategy,
+  PlaywrightExtractionUnitOutput,
 } from '../../../application/ports/playwright-extraction-strategy';
 import type { DatasetSplit } from '../../../domain/dataset/dataset-split';
 import type { SupermarketId } from '../../../domain/supermarket/supermarket-id';
@@ -108,6 +110,7 @@ export class CarnaubaPlaywrightStrategyAdapter implements PlaywrightExtractionSt
       artifactsDownloaded: stored.sharedImagesDownloaded,
       artifactsReused: stored.sharedImagesReused,
       datasetSamplesCreated: samplesCreated,
+      units: createExtractionUnits(result, stored),
       failures: result.failedStores.map((failedStore) => ({
         targetId: `${input.target.targetId}:store:${String(failedStore.store.storeId)}`,
         message: failedStore.errorMessage,
@@ -130,5 +133,50 @@ function createExtractionInput(
       runId: input.runId,
       split: config.visualDatasetSplit,
     },
+  };
+}
+
+function createExtractionUnits(
+  result: CarnaubaPlaywrightExtractionResult,
+  stored: StoredCarnaubaPlaywrightExtraction,
+): readonly PlaywrightExtractionUnitOutput[] {
+  const failedUnits = result.failedStores.map((failedStore): PlaywrightExtractionUnitOutput => {
+    return {
+      unitId: String(failedStore.store.storeId),
+      unitName: failedStore.store.name,
+      status: 'failed',
+      sourceUrl: failedStore.sourceUrl,
+      leaflets: [],
+      errorMessage: failedStore.errorMessage,
+    };
+  });
+  const succeededUnits = stored.stores.map((store): PlaywrightExtractionUnitOutput => {
+    return {
+      unitId: String(store.storeId),
+      unitName: store.storeName,
+      status: store.leaflets.length === 0 ? 'empty' : 'succeeded',
+      sourceUrl: store.sourceUrl,
+      leaflets: store.leaflets.map((leaflet) => createExtractionLeaflet(leaflet, stored)),
+      errorMessage: null,
+    };
+  });
+
+  return [...succeededUnits, ...failedUnits];
+}
+
+function createExtractionLeaflet(
+  leaflet: StoredCarnaubaPlaywrightExtraction['stores'][number]['leaflets'][number],
+  stored: StoredCarnaubaPlaywrightExtraction,
+): PlaywrightExtractionLeafletOutput {
+  const sharedLeaflet = stored.sharedLeaflets.find(
+    (candidateLeaflet) => candidateLeaflet.contentSignature === leaflet.contentSignature,
+  );
+
+  return {
+    leafletKey: leaflet.contentSignature,
+    title: leaflet.title,
+    contentSignature: leaflet.contentSignature,
+    imageCount: sharedLeaflet?.images.length ?? 0,
+    sourceUrl: leaflet.coverImageUrl,
   };
 }

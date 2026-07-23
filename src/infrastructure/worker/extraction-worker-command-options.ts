@@ -8,6 +8,7 @@ export interface ExtractionWorkerCommandOptions {
   readonly runImmediately: boolean;
   readonly retryBaseDelayMs: number;
   readonly shutdownTimeoutMs: number;
+  readonly stateRootDirectory: string;
   readonly onlyTargetIds: readonly string[];
   readonly visualDatasetCapturePolicy: VisualDatasetCapturePolicy;
 }
@@ -44,6 +45,13 @@ export function parseExtractionWorkerCommandOptions(
       'shutdown-timeout-ms',
       'WORKER_SHUTDOWN_TIMEOUT_MS',
       30_000,
+    ),
+    stateRootDirectory: readOption(
+      values,
+      env,
+      'state-root',
+      'EXTRACTION_STATE_DIR',
+      '.data/state',
     ),
     onlyTargetIds: parseTargetIds(readOptionalOption(values, env, 'only', 'WORKER_ONLY_TARGETS')),
     visualDatasetCapturePolicy: parseVisualDatasetCapturePolicy(

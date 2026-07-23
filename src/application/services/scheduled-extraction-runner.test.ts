@@ -3,8 +3,10 @@ import type { Clock } from '../ports/clock';
 import type { Logger } from '../ports/logger';
 import type {
   PlaywrightExtractionInput,
+  PlaywrightExtractionOutput,
   PlaywrightExtractionStrategy,
 } from '../ports/playwright-extraction-strategy';
+import type { ExtractionStateChangeSummary } from './extraction-state-service';
 import { InMemoryExtractionLock } from './extraction-lock';
 import { ExtractionTargetRegistry } from './extraction-target-registry';
 import { PlaywrightStrategyRegistry } from './playwright-strategy-registry';
@@ -47,6 +49,12 @@ describe('ScheduledExtractionRunner', () => {
     expect(result.targetResults[0]?.status).toBe('succeeded');
     expect(strategy.inputs[0]?.target.targetId).toBe('carnauba');
     expect(strategy.inputs[0]?.visualDatasetCapturePolicy).toBe('always');
+    expect(result.targetResults[0]).toMatchObject({
+      stateChangeSummary: {
+        targetId: 'carnauba',
+        newLeaflets: 1,
+      },
+    });
   });
 
   it('filters enabled targets by explicit target ids', async () => {
@@ -148,6 +156,23 @@ describe('ScheduledExtractionRunner', () => {
     );
   });
 
+  it('records target state after successful extraction output', async () => {
+    const stateService = new FakeExtractionStateService();
+    const strategy = new FakePlaywrightStrategy();
+    const runner = createRunner({
+      stateService,
+      strategy,
+      targets: [carnaubaTarget],
+    });
+
+    await runner.runCycle();
+
+    expect(stateService.outputs[0]?.runId).toBe(
+      'carnauba-playwright-2026-07-22T10-00-02-000Z-attempt-1',
+    );
+    expect(stateService.observedAtIsoValues[0]).toBe('2026-07-22T10:00:04.000Z');
+  });
+
   it('releases a target lock after failure', async () => {
     const lock = new InMemoryExtractionLock();
     const runner = createRunner({
@@ -203,6 +228,7 @@ interface CreateRunnerInput {
   readonly logger?: Logger;
   readonly lock?: InMemoryExtractionLock;
   readonly onlyTargetIds?: readonly string[];
+  readonly stateService?: FakeExtractionStateService;
   readonly strategy: PlaywrightExtractionStrategy;
   readonly targets: readonly [
     typeof carnaubaTarget,
@@ -222,6 +248,7 @@ function createRunner(input: CreateRunnerInput): ScheduledExtractionRunner {
       targetRegistry: new ExtractionTargetRegistry(input.targets),
       strategyRegistry: new PlaywrightStrategyRegistry([input.strategy]),
       lock: input.lock ?? new InMemoryExtractionLock(),
+      stateService: input.stateService ?? new FakeExtractionStateService(),
       clock: new IncrementingClock(),
       logger: input.logger ?? new FakeLogger(),
       delay: input.delay ?? (() => Promise.resolve()),
@@ -260,17 +287,7 @@ class FakePlaywrightStrategy implements PlaywrightExtractionStrategy {
     this.remainingFailures = config.failuresBeforeSuccess ?? 0;
   }
 
-  execute(input: PlaywrightExtractionInput): Promise<{
-    readonly runId: string;
-    readonly targetId: string;
-    readonly supermarketId: 'carnauba';
-    readonly status: 'succeeded';
-    readonly leafletsFound: number;
-    readonly artifactsDownloaded: number;
-    readonly artifactsReused: number;
-    readonly datasetSamplesCreated: 1;
-    readonly failures: readonly [];
-  }> {
+  execute(input: PlaywrightExtractionInput): Promise<PlaywrightExtractionOutput> {
     this.inputs.push(input);
 
     if (this.remainingFailures > 0) {
@@ -287,7 +304,49 @@ class FakePlaywrightStrategy implements PlaywrightExtractionStrategy {
       artifactsDownloaded: this.output.artifactsDownloaded,
       artifactsReused: this.output.artifactsReused,
       datasetSamplesCreated: 1,
+      units: [
+        {
+          unitId: '79',
+          unitName: 'Maestro',
+          status: 'succeeded',
+          sourceUrl: 'https://carnaubasupermercados.com.br/loja/79/encartes',
+          leaflets: [
+            {
+              leafletKey: 'leaflet-1',
+              title: 'Leaflet 1',
+              contentSignature: 'signature-1',
+              imageCount: 1,
+              sourceUrl: 'https://carnaubasupermercados.com.br/loja/79/encartes',
+            },
+          ],
+          errorMessage: null,
+        },
+      ],
       failures: [],
+    });
+  }
+}
+
+class FakeExtractionStateService {
+  readonly outputs: PlaywrightExtractionOutput[] = [];
+
+  readonly observedAtIsoValues: string[] = [];
+
+  recordOutput(
+    output: PlaywrightExtractionOutput,
+    observedAtIso: string,
+  ): Promise<ExtractionStateChangeSummary> {
+    this.outputs.push(output);
+    this.observedAtIsoValues.push(observedAtIso);
+
+    return Promise.resolve({
+      targetId: output.targetId,
+      unitsProcessed: output.units.length,
+      newLeaflets: output.leafletsFound,
+      unchangedLeaflets: 0,
+      removedLeaflets: 0,
+      failedUnits: output.units.filter((unit) => unit.status === 'failed').length,
+      emptyUnits: output.units.filter((unit) => unit.status === 'empty').length,
     });
   }
 }
