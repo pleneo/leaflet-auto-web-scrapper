@@ -156,15 +156,17 @@ class PlaywrightSuperDoPovoLeafletPage implements SuperDoPovoLeafletPage {
     });
   }
 
-  getLeafletCardVisualTarget(cardIndex: number): Promise<SuperDoPovoLeafletVisualTarget> {
-    return Promise.resolve({
+  async getLeafletCardVisualTarget(cardIndex: number): Promise<SuperDoPovoLeafletVisualTarget> {
+    await this.deactivateBackgroundOverlay();
+
+    return {
       page: new PlaywrightVisualDatasetPage(this.page),
       target: new PlaywrightVisualActionTarget(
         this.cardLocator().nth(cardIndex),
         `Super do Povo leaflet card ${String(cardIndex + 1)}`,
         this.timeoutMs,
       ),
-    });
+    };
   }
 
   async openLeafletAt(cardIndex: number): Promise<OpenedSuperDoPovoLeaflet> {
@@ -201,15 +203,24 @@ class PlaywrightSuperDoPovoLeafletPage implements SuperDoPovoLeafletPage {
     });
   }
 
-  getLeafletModalCloseVisualTarget(): Promise<SuperDoPovoLeafletVisualTarget> {
-    return Promise.resolve({
+  async getLeafletModalCloseVisualTarget(): Promise<SuperDoPovoLeafletVisualTarget> {
+    await this.page.evaluate(() => {
+      window.scrollTo(0, 0);
+
+      for (const modal of document.querySelectorAll('.modal.show, .modal[role="dialog"]')) {
+        modal.scrollTop = 0;
+      }
+    });
+    await this.page.waitForTimeout(100);
+
+    return {
       page: new PlaywrightVisualDatasetPage(this.page),
       target: new PlaywrightVisualActionTarget(
         this.modalCloseButtonLocator(),
         'Super do Povo leaflet modal close button',
         this.timeoutMs,
       ),
-    });
+    };
   }
 
   async closeLeafletModal(): Promise<void> {
@@ -246,7 +257,7 @@ class PlaywrightSuperDoPovoLeafletPage implements SuperDoPovoLeafletPage {
   }
 
   private cardLocator(): Locator {
-    return this.page.locator('.image-container:visible').filter({
+    return this.page.locator('.booklet-wrapper .image-container:visible').filter({
       has: this.page.locator('img[src*="botvendasstorage1"]'),
     });
   }
@@ -277,8 +288,23 @@ class PlaywrightSuperDoPovoLeafletPage implements SuperDoPovoLeafletPage {
 async function extractModalImageUrls(modal: Locator): Promise<readonly string[]> {
   const imageUrls = await modal.evaluate((modalElement): string[] => {
     return [...modalElement.querySelectorAll('img')]
+      .filter((image) => {
+        const box = image.getBoundingClientRect();
+
+        return (
+          box.width > 0 &&
+          box.height > 0 &&
+          box.top >= 0 &&
+          box.left >= 0 &&
+          box.bottom > 0 &&
+          box.right > 0 &&
+          box.top < window.innerHeight &&
+          box.left < window.innerWidth
+        );
+      })
       .map((image) => image.getAttribute('src')?.trim() ?? '')
-      .filter((source) => source.length > 0);
+      .filter((source) => source.length > 0)
+      .slice(0, 1);
   });
 
   return [...new Set(imageUrls)];

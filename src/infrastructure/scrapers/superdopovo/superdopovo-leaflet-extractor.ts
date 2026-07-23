@@ -118,7 +118,18 @@ export class SuperDoPovoLeafletExtractor {
           );
         }
 
-        for (const [imageIndex, imageUrl] of imageUrls.entries()) {
+        await this.captureModalCloseVisualDatasetSampleIfEnabled(
+          page,
+          input,
+          expectedBooklet,
+          title,
+          cardIndex,
+        );
+
+        for (const [imageIndex, imageUrl] of resolveVisibleModalImageUrls(
+          openedLeaflet,
+          imageUrls,
+        ).entries()) {
           await this.captureModalImageVisualDatasetSampleIfEnabled(
             page,
             input,
@@ -131,13 +142,6 @@ export class SuperDoPovoLeafletExtractor {
         }
 
         leaflets.push(createExtractedLeaflet(expectedBooklet, title, cardIndex, imageUrls));
-        await this.captureModalCloseVisualDatasetSampleIfEnabled(
-          page,
-          input,
-          expectedBooklet,
-          title,
-          cardIndex,
-        );
         await page.closeLeafletModal();
       }
 
@@ -268,17 +272,28 @@ export class SuperDoPovoLeafletExtractor {
       return;
     }
 
-    await this.visualDatasetCaptureService.captureBeforeAction({
-      sampleId: input.sampleId,
-      runId: input.input.visualDataset.runId,
-      supermarketId: 'superdopovo',
-      stateName: input.stateName,
-      label: input.label,
-      subject: input.subject,
-      split: input.input.visualDataset.split,
-      page: input.visualTarget.page,
-      target: input.visualTarget.target,
-    });
+    try {
+      await this.visualDatasetCaptureService.captureBeforeAction({
+        sampleId: input.sampleId,
+        runId: input.input.visualDataset.runId,
+        supermarketId: 'superdopovo',
+        stateName: input.stateName,
+        label: input.label,
+        subject: input.subject,
+        split: input.input.visualDataset.split,
+        page: input.visualTarget.page,
+        target: input.visualTarget.target,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : /* v8 ignore next 1 */ 'Unexpected visual dataset capture failure.';
+
+      throw new SuperDoPovoLeafletExtractionError(
+        `Visual dataset capture failed for ${input.sampleId} (${input.label}): ${message}`,
+      );
+    }
   }
 }
 
@@ -325,6 +340,28 @@ function resolveImageUrls(
   return [
     ...new Set([...booklet.imageUrls, ...openedLeaflet.imageUrls].map((url) => url.trim())),
   ].filter((url) => url.length > 0);
+}
+
+function resolveVisibleModalImageUrls(
+  openedLeaflet: OpenedSuperDoPovoLeaflet,
+  businessImageUrls: readonly string[],
+): readonly string[] {
+  const modalImageUrls = [
+    ...new Set(openedLeaflet.imageUrls.map((imageUrl) => imageUrl.trim())),
+  ].filter((imageUrl) => imageUrl.length > 0);
+
+  if (modalImageUrls.length > 0) {
+    return modalImageUrls;
+  }
+
+  const fallbackImageUrl = businessImageUrls[0];
+
+  /* v8 ignore next 3 */
+  if (fallbackImageUrl === undefined) {
+    return [];
+  }
+
+  return [fallbackImageUrl];
 }
 
 function resolveLeafletTitle(

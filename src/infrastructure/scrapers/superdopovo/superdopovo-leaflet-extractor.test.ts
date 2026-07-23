@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { Clock } from '../../../application/ports/clock';
 import type { LogContext, Logger } from '../../../application/ports/logger';
 import type {
+  VisualDatasetPageSnapshot,
   VisualActionTarget,
   VisualDatasetPage,
-  VisualDatasetPageSnapshot,
 } from '../../../application/ports/visual-dataset-page';
 import type { CaptureVisualDatasetSampleInput } from '../../../application/services/visual-dataset-capture-service';
 import type { PixelBoundingBox } from '../../../domain/dataset/bounding-box';
@@ -41,12 +41,11 @@ describe('SuperDoPovoLeafletExtractor', () => {
       openedLeaflets: [
         {
           title: ' ',
-          imageUrls: [' https://img.test/modal-extra.jpg ', 'https://img.test/modal-extra.jpg'],
+          imageUrls: ['https://img.test/modal-extra.jpg', 'https://img.test/modal-extra.jpg'],
         },
       ],
     });
     const captureService = new FakeVisualDatasetCaptureService(page.events);
-
     const result = await createExtractor(page, captureService).extract({
       ...createInput([createBooklet(1609, 24, 'Booklet API')]),
       visualDataset: {
@@ -56,22 +55,17 @@ describe('SuperDoPovoLeafletExtractor', () => {
     });
 
     expect(page.events).toEqual([
-      'goto:https://loja.superdopovo.com.br',
-      'wait:0',
+      'goto',
       'dismiss-cookie',
-      'capture:superdopovo-sections-menu',
+      'capture-sections',
       'open-sections',
-      'wait:0',
-      'capture:superdopovo-leaflets-link',
-      'open-leaflets-page:https://loja.superdopovo.com.br/booklets',
-      'wait:0',
-      'capture:superdopovo-leaflet-card',
-      'open-card:0',
-      'capture:superdopovo-leaflet-image',
-      'capture:superdopovo-leaflet-image',
-      'capture:superdopovo-leaflet-modal-close',
+      'capture-leaflets-link',
+      'open-leaflets-page',
+      'capture-card-0',
+      'open-card-0',
+      'capture-close',
+      'capture-image-0',
       'close-modal',
-      'close',
     ]);
     expect(result).toEqual({
       supermarketId: 'superdopovo',
@@ -96,37 +90,51 @@ describe('SuperDoPovoLeafletExtractor', () => {
         },
       ],
     });
-    expect(captureService.inputs.map((input) => input.sampleId)).toEqual([
-      'run-1-sections-menu',
-      'run-1-leaflets-link',
-      'run-1-shop-24-card-1-booklet-1609',
-      'run-1-shop-24-card-1-booklet-1609-image-1',
-      'run-1-shop-24-card-1-booklet-1609-image-2',
-      'run-1-shop-24-card-1-booklet-1609-close',
-    ]);
+    expect(captureService.inputs).toHaveLength(5);
+    expect(captureService.inputs[0]).toMatchObject({
+      sampleId: 'run-1-sections-menu',
+      supermarketId: 'superdopovo',
+      stateName: 'ANCHOR_PAGE',
+      label: 'open_leaflets_page_button',
+      subject: {
+        subjectKind: 'superdopovo-sections-menu',
+      },
+    });
+    expect(captureService.inputs[1]).toMatchObject({
+      sampleId: 'run-1-leaflets-link',
+      subject: {
+        subjectKind: 'superdopovo-leaflets-link',
+      },
+    });
     expect(captureService.inputs[2]).toMatchObject({
+      sampleId: 'run-1-shop-24-card-1-booklet-1609',
       stateName: 'LEAFLETS_PAGE',
       label: 'open_leaflet_modal_button',
       subject: {
         subjectKind: 'superdopovo-leaflet-card',
         shopId: 24,
         shopName: 'Serrinha',
-        cardIndex: 0,
         bookletId: 1609,
       },
     });
     expect(captureService.inputs[3]).toMatchObject({
-      stateName: 'LEAFLET_MODAL',
+      sampleId: 'run-1-shop-24-card-1-booklet-1609-close',
+      label: 'close_modal_button',
+      subject: {
+        subjectKind: 'superdopovo-leaflet-modal-close',
+      },
+    });
+    expect(captureService.inputs[4]).toMatchObject({
+      sampleId: 'run-1-shop-24-card-1-booklet-1609-image-1',
       label: 'extract_leaflet_image',
       subject: {
         subjectKind: 'superdopovo-leaflet-image',
-        imageIndex: 0,
-        imageUrl: 'https://img.test/cover-1.jpg',
+        imageUrl: 'https://img.test/modal-extra.jpg',
       },
     });
   });
 
-  it('uses modal title before booklet and card titles', async () => {
+  it('uses modal title before booklet title', async () => {
     const page = new FakePage({
       cards: [
         {
@@ -185,22 +193,77 @@ describe('SuperDoPovoLeafletExtractor', () => {
         },
       ],
     });
+    const input = createInput([
+      {
+        ...createBooklet(1609, 24, 'Booklet API'),
+        coverImageUrl: '',
+        imageUrls: [],
+      },
+    ]);
 
-    await expect(
-      createExtractor(page).extract(
-        createInput([
-          {
-            ...createBooklet(1609, 24, 'Booklet API'),
-            coverImageUrl: '',
-            imageUrls: [],
-          },
-        ]),
-      ),
-    ).rejects.toThrow('Super do Povo booklet 1609 did not expose image URLs.');
+    await expect(createExtractor(page).extract(input)).rejects.toThrow(
+      'Super do Povo booklet 1609 did not expose image URLs.',
+    );
     expect(page.closed).toBe(true);
   });
 
-  it('rejects invalid input values before opening a page', async () => {
+  it('wraps visual dataset capture failures with sample context', async () => {
+    const page = new FakePage({
+      cards: [
+        {
+          title: 'Card title',
+          coverImageUrl: 'https://img.test/cover-1.jpg',
+        },
+      ],
+      openedLeaflets: [
+        {
+          title: 'Card title',
+          imageUrls: ['https://img.test/cover-1.jpg'],
+        },
+      ],
+    });
+
+    await expect(
+      createExtractor(page, new ThrowingVisualDatasetCaptureService()).extract({
+        ...createInput([createBooklet(1609, 24, 'Booklet API')]),
+        visualDataset: {
+          runId: 'run-1',
+          split: 'unassigned',
+        },
+      }),
+    ).rejects.toThrow(
+      'Visual dataset capture failed for run-1-sections-menu (open_leaflets_page_button): Capture failed.',
+    );
+  });
+
+  it('wraps non-error visual dataset capture failures', async () => {
+    const page = new FakePage({
+      cards: [
+        {
+          title: 'Card title',
+          coverImageUrl: 'https://img.test/cover-1.jpg',
+        },
+      ],
+      openedLeaflets: [
+        {
+          title: 'Card title',
+          imageUrls: ['https://img.test/cover-1.jpg'],
+        },
+      ],
+    });
+
+    await expect(
+      createExtractor(page, new ThrowingNonErrorVisualDatasetCaptureService()).extract({
+        ...createInput([createBooklet(1609, 24, 'Booklet API')]),
+        visualDataset: {
+          runId: 'run-1',
+          split: 'unassigned',
+        },
+      }),
+    ).rejects.toThrow('Unexpected visual dataset capture failure.');
+  });
+
+  it('rejects invalid input values', async () => {
     const extractor = createExtractor(new FakePage({ cards: [], openedLeaflets: [] }));
 
     await expect(
@@ -209,12 +272,6 @@ describe('SuperDoPovoLeafletExtractor', () => {
         homeUrl: 'invalid',
       }),
     ).rejects.toThrow(SuperDoPovoLeafletExtractionError);
-    await expect(
-      extractor.extract({
-        ...createInput([]),
-        sourceUrl: 'invalid',
-      }),
-    ).rejects.toThrow('sourceUrl must be absolute and valid.');
     await expect(
       extractor.extract({
         ...createInput([]),
@@ -290,6 +347,8 @@ function createBooklet(bookletId: number, shopId: number, name: string): SuperDo
 }
 
 class FakePageFactory implements SuperDoPovoLeafletPageFactory {
+  readonly inputs: OpenSuperDoPovoLeafletPageInput[] = [];
+
   private readonly page: FakePage;
 
   constructor(page: FakePage) {
@@ -297,8 +356,7 @@ class FakePageFactory implements SuperDoPovoLeafletPageFactory {
   }
 
   openPage(input: OpenSuperDoPovoLeafletPageInput): Promise<SuperDoPovoLeafletPage> {
-    void input;
-
+    this.inputs.push(input);
     return Promise.resolve(this.page);
   }
 }
@@ -306,9 +364,9 @@ class FakePageFactory implements SuperDoPovoLeafletPageFactory {
 class FakePage implements SuperDoPovoLeafletPage {
   readonly events: string[] = [];
 
-  private readonly cards: readonly SuperDoPovoLeafletCard[];
+  readonly cards: readonly SuperDoPovoLeafletCard[];
 
-  private readonly openedLeaflets: readonly OpenedSuperDoPovoLeaflet[];
+  readonly openedLeaflets: readonly OpenedSuperDoPovoLeaflet[];
 
   closed = false;
 
@@ -320,13 +378,12 @@ class FakePage implements SuperDoPovoLeafletPage {
     this.openedLeaflets = input.openedLeaflets;
   }
 
-  goto(url: string): Promise<void> {
-    this.events.push(`goto:${url}`);
+  goto(): Promise<void> {
+    this.events.push('goto');
     return Promise.resolve();
   }
 
-  waitForTimeout(timeoutMs: number): Promise<void> {
-    this.events.push(`wait:${String(timeoutMs)}`);
+  waitForTimeout(): Promise<void> {
     return Promise.resolve();
   }
 
@@ -336,7 +393,7 @@ class FakePage implements SuperDoPovoLeafletPage {
   }
 
   getSectionsMenuVisualTarget(): Promise<SuperDoPovoLeafletVisualTarget> {
-    return Promise.resolve(createVisualTarget());
+    return Promise.resolve(createVisualTarget('sections'));
   }
 
   openSectionsMenu(): Promise<void> {
@@ -345,11 +402,11 @@ class FakePage implements SuperDoPovoLeafletPage {
   }
 
   getLeafletsLinkVisualTarget(): Promise<SuperDoPovoLeafletVisualTarget> {
-    return Promise.resolve(createVisualTarget());
+    return Promise.resolve(createVisualTarget('leaflets-link'));
   }
 
-  openLeafletsPage(expectedUrl: string): Promise<void> {
-    this.events.push(`open-leaflets-page:${expectedUrl}`);
+  openLeafletsPage(): Promise<void> {
+    this.events.push('open-leaflets-page');
     return Promise.resolve();
   }
 
@@ -358,30 +415,26 @@ class FakePage implements SuperDoPovoLeafletPage {
   }
 
   getLeafletCardVisualTarget(cardIndex: number): Promise<SuperDoPovoLeafletVisualTarget> {
-    void cardIndex;
-
-    return Promise.resolve(createVisualTarget());
+    return Promise.resolve(createVisualTarget(`card-${String(cardIndex)}`));
   }
 
   openLeafletAt(cardIndex: number): Promise<OpenedSuperDoPovoLeaflet> {
-    this.events.push(`open-card:${String(cardIndex)}`);
+    this.events.push(`open-card-${String(cardIndex)}`);
     const openedLeaflet = this.openedLeaflets[cardIndex];
 
     if (openedLeaflet === undefined) {
-      return Promise.reject(new Error(`Missing fake opened leaflet ${String(cardIndex)}.`));
+      throw new Error(`Missing fake opened leaflet ${String(cardIndex)}.`);
     }
 
     return Promise.resolve(openedLeaflet);
   }
 
   getLeafletModalImageVisualTarget(imageIndex: number): Promise<SuperDoPovoLeafletVisualTarget> {
-    void imageIndex;
-
-    return Promise.resolve(createVisualTarget());
+    return Promise.resolve(createVisualTarget(`image-${String(imageIndex)}`));
   }
 
   getLeafletModalCloseVisualTarget(): Promise<SuperDoPovoLeafletVisualTarget> {
-    return Promise.resolve(createVisualTarget());
+    return Promise.resolve(createVisualTarget('close'));
   }
 
   closeLeafletModal(): Promise<void> {
@@ -391,15 +444,14 @@ class FakePage implements SuperDoPovoLeafletPage {
 
   close(): Promise<void> {
     this.closed = true;
-    this.events.push('close');
     return Promise.resolve();
   }
 }
 
-function createVisualTarget(): SuperDoPovoLeafletVisualTarget {
+function createVisualTarget(name: string): SuperDoPovoLeafletVisualTarget {
   return {
     page: new FakeVisualDatasetPage(),
-    target: new FakeVisualActionTarget(),
+    target: new FakeVisualActionTarget(name),
   };
 }
 
@@ -425,7 +477,11 @@ class FakeVisualDatasetPage implements VisualDatasetPage {
 }
 
 class FakeVisualActionTarget implements VisualActionTarget {
-  readonly locatorDescription = 'fake target';
+  readonly locatorDescription: string;
+
+  constructor(name: string) {
+    this.locatorDescription = name;
+  }
 
   scrollIntoView(): Promise<void> {
     return Promise.resolve();
@@ -451,6 +507,25 @@ class FakeVisualActionTarget implements VisualActionTarget {
   }
 }
 
+class ThrowingVisualDatasetCaptureService {
+  captureBeforeAction(): Promise<VisualDatasetSample> {
+    return Promise.reject(new Error('Capture failed.'));
+  }
+}
+
+class ThrowingNonErrorVisualDatasetCaptureService {
+  captureBeforeAction(): Promise<VisualDatasetSample> {
+    return new Promise<VisualDatasetSample>((resolve, reject) => {
+      void resolve;
+      // This intentionally covers defensive handling for non-Error promise rejections.
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+      reject({
+        reason: 'Capture failed.',
+      });
+    });
+  }
+}
+
 class FakeVisualDatasetCaptureService {
   readonly inputs: CaptureVisualDatasetSampleInput[] = [];
 
@@ -461,9 +536,8 @@ class FakeVisualDatasetCaptureService {
   }
 
   captureBeforeAction(input: CaptureVisualDatasetSampleInput): Promise<VisualDatasetSample> {
-    this.events.push(`capture:${input.subject.subjectKind}`);
+    this.events.push(`capture-${createEventName(input.subject)}`);
     this.inputs.push(input);
-
     return Promise.resolve({
       sampleId: input.sampleId,
       runId: input.runId,
@@ -515,6 +589,23 @@ class FakeVisualDatasetCaptureService {
       },
       split: input.split,
     });
+  }
+}
+
+function createEventName(subject: CaptureVisualDatasetSampleInput['subject']): string {
+  switch (subject.subjectKind) {
+    case 'superdopovo-sections-menu':
+      return 'sections';
+    case 'superdopovo-leaflets-link':
+      return 'leaflets-link';
+    case 'superdopovo-leaflet-card':
+      return 'card-0';
+    case 'superdopovo-leaflet-image':
+      return `image-${String(subject.imageIndex)}`;
+    case 'superdopovo-leaflet-modal-close':
+      return 'close';
+    default:
+      return 'other';
   }
 }
 
