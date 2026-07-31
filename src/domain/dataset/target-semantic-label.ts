@@ -3,6 +3,8 @@ export type TargetSemanticLabel =
   | 'open_leaflet_modal_button'
   | 'download_pdf_button'
   | 'open_pdf_link'
+  | 'select_state_button'
+  | 'select_city_button'
   | 'select_store_button'
   | 'select_region_button'
   | 'extract_leaflet_image'

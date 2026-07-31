@@ -81,6 +81,46 @@ export interface SuperDoPovoLeafletModalCloseVisualDatasetSubject {
   readonly bookletTitle: string;
 }
 
+export interface MixMateusStateSelectionVisualDatasetSubject {
+  readonly subjectKind: 'mixmateus-state-selection';
+  readonly stateCode: string;
+  readonly stateName: string;
+}
+
+export interface MixMateusCitySelectionVisualDatasetSubject {
+  readonly subjectKind: 'mixmateus-city-selection';
+  readonly stateCode: string;
+  readonly cityName: string;
+}
+
+export interface MixMateusStoreSelectionVisualDatasetSubject {
+  readonly subjectKind: 'mixmateus-store-selection';
+  readonly stateCode: string;
+  readonly cityName: string;
+  readonly storeSlug: string;
+  readonly storeName: string;
+}
+
+export interface MixMateusLeafletCardVisualDatasetSubject {
+  readonly subjectKind: 'mixmateus-leaflet-card';
+  readonly stateCode: string;
+  readonly cityName: string;
+  readonly storeSlug: string;
+  readonly storeName: string;
+  readonly cardIndex: number;
+  readonly leafletTitle: string;
+}
+
+export interface MixMateusPdfDownloadVisualDatasetSubject {
+  readonly subjectKind: 'mixmateus-pdf-download';
+  readonly stateCode: string;
+  readonly cityName: string;
+  readonly storeSlug: string;
+  readonly storeName: string;
+  readonly cardIndex: number;
+  readonly leafletTitle: string;
+}
+
 export type VisualDatasetSubject =
   | CarnaubaHomeLeafletsLinkVisualDatasetSubject
   | CarnaubaLeafletCardVisualDatasetSubject
@@ -90,7 +130,12 @@ export type VisualDatasetSubject =
   | SuperDoPovoLeafletsLinkVisualDatasetSubject
   | SuperDoPovoLeafletCardVisualDatasetSubject
   | SuperDoPovoLeafletImageVisualDatasetSubject
-  | SuperDoPovoLeafletModalCloseVisualDatasetSubject;
+  | SuperDoPovoLeafletModalCloseVisualDatasetSubject
+  | MixMateusStateSelectionVisualDatasetSubject
+  | MixMateusCitySelectionVisualDatasetSubject
+  | MixMateusStoreSelectionVisualDatasetSubject
+  | MixMateusLeafletCardVisualDatasetSubject
+  | MixMateusPdfDownloadVisualDatasetSubject;
 
 export interface VisualDatasetSample {
   readonly sampleId: string;

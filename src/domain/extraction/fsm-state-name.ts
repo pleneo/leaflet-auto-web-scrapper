@@ -1,5 +1,7 @@
 export type FsmStateName =
   | 'ANCHOR_PAGE'
+  | 'STATE_SELECTION'
+  | 'CITY_SELECTION'
   | 'STORE_SELECTION'
   | 'LEAFLETS_PAGE'
   | 'LEAFLET_MODAL'

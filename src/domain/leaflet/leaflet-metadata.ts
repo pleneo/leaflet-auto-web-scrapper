@@ -31,4 +31,16 @@ export interface AssaiLeafletMetadata {
   readonly regionCode: string | null;
 }
 
-export type LeafletMetadata = BaseLeafletMetadata | CarnaubaLeafletMetadata | AssaiLeafletMetadata;
+export interface MixMateusLeafletMetadata {
+  readonly metadataKind: 'mixmateus';
+  readonly capturedAtIso: string;
+  readonly sourcePageUrl: string;
+  readonly validityStartDateIso: string | null;
+  readonly validityEndDateIso: string | null;
+  readonly city: string;
+  readonly stateCode: string;
+  readonly storeSlug: string;
+}
+
+export type LeafletMetadata =
+  BaseLeafletMetadata | CarnaubaLeafletMetadata | AssaiLeafletMetadata | MixMateusLeafletMetadata;
