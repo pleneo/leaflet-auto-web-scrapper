@@ -255,7 +255,10 @@ function createVisualExtractionInput(
   };
 }
 
-function createExtractedLeafletFromApi(booklet: SuperDoPovoBooklet, index: number): ExtractedLeaflet {
+function createExtractedLeafletFromApi(
+  booklet: SuperDoPovoBooklet,
+  index: number,
+): ExtractedLeaflet {
   return {
     leafletId: `superdopovo-${String(booklet.bookletId)}`,
     title: booklet.name,

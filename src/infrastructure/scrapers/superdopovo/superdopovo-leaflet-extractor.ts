@@ -264,10 +264,7 @@ export class SuperDoPovoLeafletExtractor {
   }
 
   private async captureIfEnabled(input: CaptureIfEnabledInput): Promise<void> {
-    if (
-      input.input.visualDataset === undefined ||
-      this.visualDatasetCaptureService === undefined
-    ) {
+    if (input.input.visualDataset === undefined || this.visualDatasetCaptureService === undefined) {
       return;
     }
 
@@ -325,8 +322,9 @@ function resolveImageUrls(
   booklet: SuperDoPovoBooklet,
   openedLeaflet: OpenedSuperDoPovoLeaflet,
 ): readonly string[] {
-  return [...new Set([...booklet.imageUrls, ...openedLeaflet.imageUrls].map((url) => url.trim()))]
-    .filter((url) => url.length > 0);
+  return [
+    ...new Set([...booklet.imageUrls, ...openedLeaflet.imageUrls].map((url) => url.trim())),
+  ].filter((url) => url.length > 0);
 }
 
 function resolveLeafletTitle(

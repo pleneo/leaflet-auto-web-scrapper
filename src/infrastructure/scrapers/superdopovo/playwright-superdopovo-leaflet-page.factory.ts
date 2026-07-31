@@ -256,7 +256,9 @@ class PlaywrightSuperDoPovoLeafletPage implements SuperDoPovoLeafletPage {
   }
 
   private modalImageLocator(imageIndex: number): Locator {
-    return this.modalLocator().locator('img.booklet-image:visible, img.img-fluid:visible').nth(imageIndex);
+    return this.modalLocator()
+      .locator('img.booklet-image:visible, img.img-fluid:visible')
+      .nth(imageIndex);
   }
 
   private modalCloseButtonLocator(): Locator {
