@@ -19,17 +19,24 @@ import { MercadappCarnaubaApiClient } from '../scrapers/carnauba/mercadapp-api-c
 import { PlaywrightCarnaubaLeafletPageFactory } from '../scrapers/carnauba/playwright-carnauba-leaflet-page.factory';
 import { PlaywrightMercadappAuthTokenProvider } from '../scrapers/carnauba/playwright-mercadapp-auth-token-provider';
 import { StoreSnapshotCache } from '../scrapers/carnauba/store-snapshot-cache';
+import { MixMateusLeafletExtractor } from '../scrapers/mixmateus/mixmateus-leaflet-extractor';
+import { MixMateusPlaywrightStrategyAdapter } from '../scrapers/mixmateus/mixmateus-playwright-strategy-adapter';
+import { listMixMateusMonitoredStores } from '../scrapers/mixmateus/mixmateus-targets';
+import { PlaywrightMixMateusLeafletPageFactory } from '../scrapers/mixmateus/playwright-mixmateus-leaflet-page.factory';
 import { PlaywrightSuperDoPovoApiClient } from '../scrapers/superdopovo/playwright-superdopovo-api-client';
 import { PlaywrightSuperDoPovoLeafletPageFactory } from '../scrapers/superdopovo/playwright-superdopovo-leaflet-page.factory';
 import { SuperDoPovoLeafletExtractor } from '../scrapers/superdopovo/superdopovo-leaflet-extractor';
 import { SuperDoPovoPlaywrightExtractionService } from '../scrapers/superdopovo/superdopovo-playwright-extraction';
 import { SuperDoPovoPlaywrightStrategyAdapter } from '../scrapers/superdopovo/superdopovo-playwright-strategy-adapter';
 import { FetchLeafletImageHttpClient } from '../storage/fetch-leaflet-image-http-client';
+import { FetchLeafletPdfHttpClient } from '../storage/fetch-leaflet-pdf-http-client';
 import { LocalCarnaubaPlaywrightLeafletStorage } from '../storage/carnauba-playwright-leaflet-storage';
+import { LocalSharedPdfLeafletStorage } from '../storage/leaflet-pdf-storage';
 import { LocalSharedImageGalleryStorage } from '../storage/shared-image-gallery-storage';
 import { SystemClock } from '../time/system-clock';
 import { parseCarnaubaPlaywrightCommandOptions } from './carnauba-playwright-command-options';
 import { parseExtractionWorkerCommandOptions } from './extraction-worker-command-options';
+import { parseMixMateusPlaywrightCommandOptions } from './mixmateus-playwright-command-options';
 import { parseSuperDoPovoPlaywrightCommandOptions } from './superdopovo-playwright-command-options';
 
 async function main(): Promise<void> {
@@ -47,6 +54,10 @@ async function run(): Promise<void> {
   const workerOptions = parseExtractionWorkerCommandOptions(process.argv.slice(2), process.env);
   const carnaubaOptions = parseCarnaubaPlaywrightCommandOptions(process.argv.slice(2), process.env);
   const superDoPovoOptions = parseSuperDoPovoPlaywrightCommandOptions(
+    process.argv.slice(2),
+    process.env,
+  );
+  const mixMateusOptions = parseMixMateusPlaywrightCommandOptions(
     process.argv.slice(2),
     process.env,
   );
@@ -83,10 +94,20 @@ async function run(): Promise<void> {
           intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
           maxAttempts: 1,
         }),
+        createExtractionTarget({
+          targetId: 'mixmateus',
+          supermarketId: 'mixmateus',
+          supermarketName: 'Mix Mateus',
+          mode: 'playwright',
+          enabled: true,
+          intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
+          maxAttempts: 1,
+        }),
       ]),
       strategyRegistry: new PlaywrightStrategyRegistry([
         createCarnaubaStrategy(carnaubaOptions, visualDatasetRootDirectory, clock, logger),
         createSuperDoPovoStrategy(superDoPovoOptions, visualDatasetRootDirectory, clock, logger),
+        createMixMateusStrategy(mixMateusOptions, visualDatasetRootDirectory, clock, logger),
       ]),
       lock: new InMemoryExtractionLock(),
       stateService: new ExtractionStateService(
@@ -231,6 +252,51 @@ function createSuperDoPovoStrategy(
     {
       extractionService,
       storage: new LocalSharedImageGalleryStorage(new FetchLeafletImageHttpClient()),
+      countVisualDatasetSamples,
+    },
+  );
+}
+
+function createMixMateusStrategy(
+  options: ReturnType<typeof parseMixMateusPlaywrightCommandOptions>,
+  visualDatasetRootDirectory: string,
+  clock: SystemClock,
+  logger: Logger,
+): MixMateusPlaywrightStrategyAdapter {
+  const visualDatasetCaptureService =
+    options.visualDatasetEnabled && visualDatasetRootDirectory.trim().length > 0
+      ? new VisualDatasetCaptureService(
+          new FileSystemVisualDatasetSampleRepository({
+            rootDirectory: visualDatasetRootDirectory,
+          }),
+          clock,
+        )
+      : undefined;
+  const extractionService = new MixMateusLeafletExtractor(
+    new PlaywrightMixMateusLeafletPageFactory(),
+    clock,
+    logger,
+    visualDatasetCaptureService,
+  );
+
+  return new MixMateusPlaywrightStrategyAdapter(
+    {
+      extractionInput: {
+        homeUrl: options.siteBaseUrl,
+        stores: listMixMateusMonitoredStores(),
+        viewport: options.viewport,
+        timeoutMs: options.timeoutMs,
+        storeTimeoutMs: options.storeTimeoutMs,
+        maxStoreAttempts: options.maxStoreAttempts,
+        settleDelayMs: options.settleDelayMs,
+      },
+      outputRootDirectory: resolve(process.cwd(), options.outputRootDirectory),
+      visualDatasetRootDirectory,
+      visualDatasetSplit: options.visualDatasetSplit,
+    },
+    {
+      extractionService,
+      storage: new LocalSharedPdfLeafletStorage(new FetchLeafletPdfHttpClient()),
       countVisualDatasetSamples,
     },
   );
