@@ -493,7 +493,7 @@ Purpose:
 
 - implement the Playwright visual capture adapter;
 - receive page, locator, state name, and semantic label;
-- produce an `AcademicDatasetSample`;
+- produce a `VisualDatasetSample`;
 - rely on the coordinate mapper from the previous PR.
 
 Expected scope:
