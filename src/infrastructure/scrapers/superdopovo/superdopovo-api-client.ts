@@ -6,7 +6,7 @@ import type {
   SuperDoPovoShopCatalogProvider,
 } from './superdopovo-api-types';
 
-interface SuperDoPovoAddressResponse {
+export interface SuperDoPovoAddressResponse {
   readonly zipcode?: string;
   readonly street?: string;
   readonly number?: string;
@@ -15,19 +15,19 @@ interface SuperDoPovoAddressResponse {
   readonly state?: string;
 }
 
-interface SuperDoPovoShopResponse {
+export interface SuperDoPovoShopResponse {
   readonly id?: number;
   readonly name?: string;
   readonly address?: SuperDoPovoAddressResponse;
 }
 
-interface SuperDoPovoBookletSheetResponse {
+export interface SuperDoPovoBookletSheetResponse {
   readonly id?: number;
   readonly booklet_id?: number;
   readonly link?: string;
 }
 
-interface SuperDoPovoBookletResponse {
+export interface SuperDoPovoBookletResponse {
   readonly id?: number;
   readonly name?: string;
   readonly start?: string | null;
@@ -64,7 +64,7 @@ export class SuperDoPovoApiClient
   async listShops(): Promise<readonly SuperDoPovoShop[]> {
     const response = await this.fetchJsonArray<SuperDoPovoShopResponse>('/shops/addresses');
 
-    return response.map(parseShop);
+    return response.map(parseSuperDoPovoShopResponse);
   }
 
   async listBooklets(shopId: number): Promise<readonly SuperDoPovoBooklet[]> {
@@ -73,7 +73,7 @@ export class SuperDoPovoApiClient
       `/booklets/${String(shopId)}`,
     );
 
-    return response.map((booklet) => parseBooklet(booklet, shopId));
+    return response.map((booklet) => parseSuperDoPovoBookletResponse(booklet, shopId));
   }
 
   private async fetchJsonArray<TResponse>(path: string): Promise<readonly TResponse[]> {
@@ -102,7 +102,7 @@ export class SuperDoPovoApiClient
   }
 }
 
-function parseShop(response: SuperDoPovoShopResponse): SuperDoPovoShop {
+export function parseSuperDoPovoShopResponse(response: SuperDoPovoShopResponse): SuperDoPovoShop {
   if (response.id === undefined || response.name === undefined || response.address === undefined) {
     throw new Error('Invalid Super do Povo shop response.');
   }
@@ -110,11 +110,13 @@ function parseShop(response: SuperDoPovoShopResponse): SuperDoPovoShop {
   return {
     shopId: response.id,
     name: response.name,
-    address: parseAddress(response.address),
+    address: parseSuperDoPovoAddressResponse(response.address),
   };
 }
 
-function parseAddress(response: SuperDoPovoAddressResponse): SuperDoPovoAddress {
+export function parseSuperDoPovoAddressResponse(
+  response: SuperDoPovoAddressResponse,
+): SuperDoPovoAddress {
   return {
     zipcode: response.zipcode ?? '',
     street: response.street ?? '',
@@ -125,7 +127,7 @@ function parseAddress(response: SuperDoPovoAddressResponse): SuperDoPovoAddress 
   };
 }
 
-function parseBooklet(
+export function parseSuperDoPovoBookletResponse(
   response: SuperDoPovoBookletResponse,
   fallbackShopId: number,
 ): SuperDoPovoBooklet {
@@ -139,12 +141,14 @@ function parseBooklet(
     startDateIso: response.start ?? null,
     endDateIso: response.end ?? null,
     coverImageUrl: response.link,
-    imageUrls: createBookletImageUrls(response),
+    imageUrls: createSuperDoPovoBookletImageUrls(response),
     shopId: response.pivot?.shop_id ?? fallbackShopId,
   };
 }
 
-function createBookletImageUrls(response: SuperDoPovoBookletResponse): readonly string[] {
+export function createSuperDoPovoBookletImageUrls(
+  response: SuperDoPovoBookletResponse,
+): readonly string[] {
   const imageUrls = [
     response.link,
     ...(response.links ?? []),

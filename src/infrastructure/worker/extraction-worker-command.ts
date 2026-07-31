@@ -19,11 +19,18 @@ import { MercadappCarnaubaApiClient } from '../scrapers/carnauba/mercadapp-api-c
 import { PlaywrightCarnaubaLeafletPageFactory } from '../scrapers/carnauba/playwright-carnauba-leaflet-page.factory';
 import { PlaywrightMercadappAuthTokenProvider } from '../scrapers/carnauba/playwright-mercadapp-auth-token-provider';
 import { StoreSnapshotCache } from '../scrapers/carnauba/store-snapshot-cache';
+import { PlaywrightSuperDoPovoApiClient } from '../scrapers/superdopovo/playwright-superdopovo-api-client';
+import { PlaywrightSuperDoPovoLeafletPageFactory } from '../scrapers/superdopovo/playwright-superdopovo-leaflet-page.factory';
+import { SuperDoPovoLeafletExtractor } from '../scrapers/superdopovo/superdopovo-leaflet-extractor';
+import { SuperDoPovoPlaywrightExtractionService } from '../scrapers/superdopovo/superdopovo-playwright-extraction';
+import { SuperDoPovoPlaywrightStrategyAdapter } from '../scrapers/superdopovo/superdopovo-playwright-strategy-adapter';
 import { FetchLeafletImageHttpClient } from '../storage/fetch-leaflet-image-http-client';
 import { LocalCarnaubaPlaywrightLeafletStorage } from '../storage/carnauba-playwright-leaflet-storage';
+import { LocalSharedImageGalleryStorage } from '../storage/shared-image-gallery-storage';
 import { SystemClock } from '../time/system-clock';
 import { parseCarnaubaPlaywrightCommandOptions } from './carnauba-playwright-command-options';
 import { parseExtractionWorkerCommandOptions } from './extraction-worker-command-options';
+import { parseSuperDoPovoPlaywrightCommandOptions } from './superdopovo-playwright-command-options';
 
 async function main(): Promise<void> {
   try {
@@ -39,6 +46,10 @@ async function main(): Promise<void> {
 async function run(): Promise<void> {
   const workerOptions = parseExtractionWorkerCommandOptions(process.argv.slice(2), process.env);
   const carnaubaOptions = parseCarnaubaPlaywrightCommandOptions(process.argv.slice(2), process.env);
+  const superDoPovoOptions = parseSuperDoPovoPlaywrightCommandOptions(
+    process.argv.slice(2),
+    process.env,
+  );
   const logger = createLogger(process.env);
   const clock = new SystemClock();
   const visualDatasetRootDirectory = resolve(
@@ -63,9 +74,19 @@ async function run(): Promise<void> {
           intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
           maxAttempts: 1,
         }),
+        createExtractionTarget({
+          targetId: 'superdopovo',
+          supermarketId: 'superdopovo',
+          supermarketName: 'Super do Povo',
+          mode: 'playwright',
+          enabled: true,
+          intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
+          maxAttempts: 1,
+        }),
       ]),
       strategyRegistry: new PlaywrightStrategyRegistry([
         createCarnaubaStrategy(carnaubaOptions, visualDatasetRootDirectory, clock, logger),
+        createSuperDoPovoStrategy(superDoPovoOptions, visualDatasetRootDirectory, clock, logger),
       ]),
       lock: new InMemoryExtractionLock(),
       stateService: new ExtractionStateService(
@@ -155,6 +176,62 @@ function createCarnaubaStrategy(
       storage: new LocalCarnaubaPlaywrightLeafletStorage(new FetchLeafletImageHttpClient()),
       countVisualDatasetSamples,
       nowIso: () => clock.nowIso(),
+    },
+  );
+}
+
+function createSuperDoPovoStrategy(
+  options: ReturnType<typeof parseSuperDoPovoPlaywrightCommandOptions>,
+  visualDatasetRootDirectory: string,
+  clock: SystemClock,
+  logger: Logger,
+): SuperDoPovoPlaywrightStrategyAdapter {
+  const apiClient = new PlaywrightSuperDoPovoApiClient({
+    bootstrapUrl: `${options.siteBaseUrl.replace(/\/+$/, '')}/booklets`,
+    apiBaseUrl: options.apiBaseUrl,
+    timeoutMs: options.timeoutMs,
+  });
+  const visualDatasetCaptureService =
+    options.visualDatasetEnabled && visualDatasetRootDirectory.trim().length > 0
+      ? new VisualDatasetCaptureService(
+          new FileSystemVisualDatasetSampleRepository({
+            rootDirectory: visualDatasetRootDirectory,
+          }),
+          clock,
+        )
+      : undefined;
+  const extractionService = new SuperDoPovoPlaywrightExtractionService(
+    apiClient,
+    apiClient,
+    new SuperDoPovoLeafletExtractor(
+      new PlaywrightSuperDoPovoLeafletPageFactory(),
+      clock,
+      logger,
+      visualDatasetCaptureService,
+    ),
+    clock,
+    logger,
+  );
+
+  return new SuperDoPovoPlaywrightStrategyAdapter(
+    {
+      extractionInput: {
+        siteBaseUrl: options.siteBaseUrl,
+        defaultShopId: options.defaultShopId,
+        viewport: options.viewport,
+        timeoutMs: options.timeoutMs,
+        shopTimeoutMs: options.shopTimeoutMs,
+        maxShopAttempts: options.maxShopAttempts,
+        settleDelayMs: options.settleDelayMs,
+      },
+      outputRootDirectory: resolve(process.cwd(), options.outputRootDirectory),
+      visualDatasetRootDirectory,
+      visualDatasetSplit: options.visualDatasetSplit,
+    },
+    {
+      extractionService,
+      storage: new LocalSharedImageGalleryStorage(new FetchLeafletImageHttpClient()),
+      countVisualDatasetSamples,
     },
   );
 }
