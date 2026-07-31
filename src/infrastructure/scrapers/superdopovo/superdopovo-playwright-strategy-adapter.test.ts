@@ -46,7 +46,7 @@ describe('SuperDoPovoPlaywrightStrategyAdapter', () => {
               leafletKey: 'signature-1',
               title: 'Booklet 1609',
               contentSignature: 'signature-1',
-              imageCount: 1,
+              artifactCount: 1,
               sourceUrl: 'https://img.test/cover.jpg',
             },
           ],
@@ -161,7 +161,7 @@ describe('SuperDoPovoPlaywrightStrategyAdapter', () => {
     const output = await adapter.execute(createInput('disabled'));
 
     expect(output.status).toBe('succeeded');
-    expect(output.units[0]?.leaflets[0]?.imageCount).toBe(0);
+    expect(output.units[0]?.leaflets[0]?.artifactCount).toBe(0);
   });
 });
 

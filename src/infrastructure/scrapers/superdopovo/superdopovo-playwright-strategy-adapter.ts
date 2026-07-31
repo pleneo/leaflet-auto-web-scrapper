@@ -172,7 +172,7 @@ function createExtractionLeaflet(
     leafletKey: leaflet.contentSignature,
     title: leaflet.title,
     contentSignature: leaflet.contentSignature,
-    imageCount: sharedLeaflet?.images.length ?? 0,
+    artifactCount: sharedLeaflet?.images.length ?? 0,
     sourceUrl: leaflet.coverImageUrl,
   };
 }

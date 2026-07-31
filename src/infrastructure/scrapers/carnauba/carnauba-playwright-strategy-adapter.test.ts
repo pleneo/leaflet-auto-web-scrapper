@@ -65,7 +65,7 @@ describe('CarnaubaPlaywrightStrategyAdapter', () => {
               leafletKey: 'signature-1',
               title: 'Leaflet 1',
               contentSignature: 'signature-1',
-              imageCount: 1,
+              artifactCount: 1,
               sourceUrl: 'https://cdn.example.com/cover.png',
             },
           ],
@@ -202,7 +202,7 @@ describe('CarnaubaPlaywrightStrategyAdapter', () => {
 
     const output = await adapter.execute(createInput('disabled'));
 
-    expect(output.units[0]?.leaflets[0]?.imageCount).toBe(0);
+    expect(output.units[0]?.leaflets[0]?.artifactCount).toBe(0);
   });
 
   function createAdapter(input: {

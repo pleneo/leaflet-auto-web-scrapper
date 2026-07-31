@@ -32,7 +32,7 @@ export interface ExtractionLeafletState {
   readonly leafletKey: string;
   readonly title: string;
   readonly contentSignature: string;
-  readonly imageCount: number;
+  readonly artifactCount: number;
   readonly sourceUrl: string;
   readonly firstSeenAtIso: string;
   readonly lastSeenAtIso: string;
