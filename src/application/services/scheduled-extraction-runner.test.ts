@@ -315,7 +315,7 @@ class FakePlaywrightStrategy implements PlaywrightExtractionStrategy {
               leafletKey: 'leaflet-1',
               title: 'Leaflet 1',
               contentSignature: 'signature-1',
-              imageCount: 1,
+              artifactCount: 1,
               sourceUrl: 'https://carnaubasupermercados.com.br/loja/79/encartes',
             },
           ],

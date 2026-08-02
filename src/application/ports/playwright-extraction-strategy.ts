@@ -37,7 +37,7 @@ export interface PlaywrightExtractionLeafletOutput {
   readonly leafletKey: string;
   readonly title: string;
   readonly contentSignature: string;
-  readonly imageCount: number;
+  readonly artifactCount: number;
   readonly sourceUrl: string;
 }
 

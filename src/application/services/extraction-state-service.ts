@@ -109,7 +109,7 @@ function compareUnitState(
       leafletKey: leaflet.leafletKey,
       title: leaflet.title,
       contentSignature: leaflet.contentSignature,
-      imageCount: leaflet.imageCount,
+      artifactCount: leaflet.artifactCount,
       sourceUrl: leaflet.sourceUrl,
       firstSeenAtIso: previousLeaflet?.firstSeenAtIso ?? observedAtIso,
       lastSeenAtIso: observedAtIso,
