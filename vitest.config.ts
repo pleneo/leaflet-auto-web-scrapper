@@ -33,6 +33,7 @@ export default defineConfig({
         'src/infrastructure/scrapers/superdopovo/superdopovo-api-types.ts',
         'src/infrastructure/scrapers/superdopovo/superdopovo-leaflet-page.ts',
         'src/infrastructure/storage/fetch-leaflet-image-http-client.ts',
+        'src/infrastructure/storage/fetch-leaflet-pdf-http-client.ts',
         'src/infrastructure/worker/carnauba-api-extract-command.ts',
         'src/infrastructure/worker/carnauba-leaflets-smoke-command.ts',
         'src/infrastructure/worker/carnauba-playwright-command.ts',
