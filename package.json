@@ -8,6 +8,9 @@
     "npm": ">=10"
   },
   "scripts": {
+    "setup": "npm ci && npm run setup:browsers",
+    "setup:browsers": "playwright install chromium",
+    "setup:browsers:deps": "playwright install --with-deps chromium",
     "dev": "vite",
     "build": "npm run typecheck && vite build",
     "typecheck": "tsc -b",
