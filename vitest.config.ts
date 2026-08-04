@@ -33,6 +33,7 @@ export default defineConfig({
         'src/infrastructure/scrapers/mixmateus/playwright-mixmateus-leaflet-page.factory.ts',
         'src/infrastructure/scrapers/atacadao/atacadao-leaflet-page.ts',
         'src/infrastructure/scrapers/atacadao/atacadao-pdf-leaflet.ts',
+        'src/infrastructure/scrapers/atacadao/playwright-atacadao-leaflet-page.factory.ts',
         'src/infrastructure/scrapers/superdopovo/playwright-superdopovo-api-client.ts',
         'src/infrastructure/scrapers/superdopovo/playwright-superdopovo-leaflet-page.factory.ts',
         'src/infrastructure/scrapers/superdopovo/superdopovo-api-types.ts',
