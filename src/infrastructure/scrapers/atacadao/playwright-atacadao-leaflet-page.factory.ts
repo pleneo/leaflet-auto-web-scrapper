@@ -19,6 +19,14 @@ interface RawAtacadaoLeafletCard {
   readonly validityText: string | null;
 }
 
+interface RawAtacadaoStorePageCandidate {
+  readonly href: string;
+  readonly text: string;
+}
+
+const ATACADAO_STORES_DIRECTORY_URL = 'https://www.atacadao.com.br/institucional/nossas-lojas';
+const MAX_STORE_DIRECTORY_EXPANSIONS = 40;
+
 export class PlaywrightAtacadaoLeafletPageFactory implements AtacadaoLeafletPageFactory {
   async openPage(input: OpenAtacadaoLeafletPageInput): Promise<AtacadaoLeafletPage> {
     const browser = await chromium.launch({
@@ -65,6 +73,8 @@ class PlaywrightAtacadaoLeafletPage implements AtacadaoLeafletPage {
 
   private readonly timeoutMs: number;
 
+  private lastNavigationStatus: number | null = null;
+
   constructor(browser: Browser, context: BrowserContext, page: Page, timeoutMs: number) {
     this.browser = browser;
     this.context = context;
@@ -73,15 +83,60 @@ class PlaywrightAtacadaoLeafletPage implements AtacadaoLeafletPage {
   }
 
   async goto(url: string): Promise<void> {
-    await this.page.goto(url, {
+    const response = await this.page.goto(url, {
       timeout: this.timeoutMs,
       waitUntil: 'domcontentloaded',
     });
+    this.lastNavigationStatus = response?.status() ?? null;
     await this.page
       .waitForLoadState('networkidle', {
         timeout: this.timeoutMs,
       })
       .catch(() => undefined);
+  }
+
+  async isStorePageUnavailable(): Promise<boolean> {
+    if (this.lastNavigationStatus === 404) {
+      return true;
+    }
+
+    return this.page
+      .getByRole('heading', {
+        name: /página não encontrada/i,
+      })
+      .first()
+      .isVisible({
+        timeout: 1_000,
+      })
+      .catch(() => false);
+  }
+
+  async resolveStorePageUrl(store: AtacadaoMonitoredStore): Promise<string | null> {
+    await this.goto(ATACADAO_STORES_DIRECTORY_URL);
+    await this.dismissCookieBanner();
+    await this.selectDirectoryOption(this.stateSelectLocator(), store.stateCode);
+    await this.page.waitForTimeout(1_000);
+    await this.selectDirectoryOption(this.citySelectLocator(), store.cityName);
+    await this.page.waitForTimeout(2_000);
+
+    for (let expansion = 0; expansion <= MAX_STORE_DIRECTORY_EXPANSIONS; expansion += 1) {
+      const matchedUrl = await this.findStorePageCandidateUrl(store);
+
+      if (matchedUrl !== null) {
+        return matchedUrl;
+      }
+
+      if (!(await this.hasMoreStores())) {
+        return null;
+      }
+
+      await this.showMoreStoresButtonLocator().click({
+        timeout: this.timeoutMs,
+      });
+      await this.page.waitForTimeout(500);
+    }
+
+    return null;
   }
 
   async waitForTimeout(timeoutMs: number): Promise<void> {
@@ -235,6 +290,94 @@ class PlaywrightAtacadaoLeafletPage implements AtacadaoLeafletPage {
       .first();
   }
 
+  private async hasMoreStores(): Promise<boolean> {
+    return this.showMoreStoresButtonLocator()
+      .isVisible({
+        timeout: 1_000,
+      })
+      .catch(() => false);
+  }
+
+  private showMoreStoresButtonLocator(): Locator {
+    return this.page
+      .getByRole('button', {
+        name: /^mostrar mais$/i,
+      })
+      .first();
+  }
+
+  private stateSelectLocator(): Locator {
+    return this.page.locator('select').nth(0);
+  }
+
+  private citySelectLocator(): Locator {
+    return this.page.locator('select').nth(1);
+  }
+
+  private async selectDirectoryOption(locator: Locator, expectedText: string): Promise<void> {
+    const options = await locator.evaluate(
+      (selectElement): readonly { text: string; value: string }[] => {
+        if (!(selectElement instanceof HTMLSelectElement)) {
+          return [];
+        }
+
+        return Array.from(selectElement.options).map((option) => ({
+          text: option.textContent.trim(),
+          value: option.value,
+        }));
+      },
+    );
+    const selectedOption = options.find(
+      (option) => normalizeComparableText(option.text) === normalizeComparableText(expectedText),
+    );
+
+    if (selectedOption === undefined) {
+      throw new Error(`Atacadao directory option "${expectedText}" was not found.`);
+    }
+
+    await locator.selectOption({
+      value: selectedOption.value,
+    });
+  }
+
+  private async findStorePageCandidateUrl(store: AtacadaoMonitoredStore): Promise<string | null> {
+    const candidates = await this.page
+      .locator('a[href*="/loja/"]')
+      .evaluateAll((elements): RawAtacadaoStorePageCandidate[] => {
+        const seenUrls = new Set<string>();
+        const candidates: RawAtacadaoStorePageCandidate[] = [];
+
+        for (const element of elements) {
+          const link = element instanceof HTMLAnchorElement ? element : null;
+
+          if (link === null) {
+            continue;
+          }
+
+          const href = link.href.trim();
+          const text = link.textContent.replace(/\s+/g, ' ').trim();
+
+          if (href.length === 0 || text.length === 0 || seenUrls.has(href)) {
+            continue;
+          }
+
+          seenUrls.add(href);
+          candidates.push({
+            href,
+            text,
+          });
+        }
+
+        return candidates;
+      });
+    const normalizedStoreName = normalizeComparableText(store.storeName);
+    const matchedCandidate = candidates.find((candidate) =>
+      normalizeComparableText(candidate.text).includes(normalizedStoreName),
+    );
+
+    return matchedCandidate?.href ?? null;
+  }
+
   private createVisualTarget(locator: Locator, description: string): AtacadaoLeafletVisualTarget {
     return {
       page: new PlaywrightVisualDatasetPage(this.page),
@@ -245,4 +388,14 @@ class PlaywrightAtacadaoLeafletPage implements AtacadaoLeafletPage {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeComparableText(value: string): string {
+  return value
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }

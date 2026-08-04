@@ -192,42 +192,108 @@ export class AtacadaoLeafletExtractor {
     });
 
     try {
-      await page.goto(store.finalPageUrl);
-      await page.waitForTimeout(input.settleDelayMs);
-      await page.dismissCookieBanner();
-      await page.waitForStoreLeaflets(store);
-      await page.waitForTimeout(input.settleDelayMs);
-      await this.expandAllLeaflets(page, input, store);
-
-      const cards = await page.discoverCards();
-      const leaflets: ExtractedAtacadaoPdfLeaflet[] = [];
-
-      for (const card of cards) {
-        await this.captureLeafletCardIfEnabled(page, input, store, card);
-
-        if (card.pdfUrl.trim().length === 0) {
-          throw new AtacadaoLeafletExtractionError(
-            `Atacadao leaflet card ${String(card.cardIndex)} did not expose a PDF URL.`,
-          );
-        }
-
-        leaflets.push({
-          leafletId: createAtacadaoLeafletId(store, card),
-          title: normalizeLeafletTitle(card.title),
-          cardIndex: card.cardIndex,
-          pdfUrl: card.pdfUrl,
-          validityText: card.validityText,
-        });
-      }
+      const sourceUrl = await this.resolveReachableStorePageUrl(page, input, store);
+      const leaflets = await this.extractStoreLeafletsFromCurrentPage(page, input, store);
 
       return {
         status: 'succeeded',
-        sourceUrl: store.finalPageUrl,
+        sourceUrl,
         leaflets,
       };
     } finally {
       await page.close();
     }
+  }
+
+  private async resolveReachableStorePageUrl(
+    page: AtacadaoLeafletPage,
+    input: ExtractAtacadaoLeafletsInput,
+    store: AtacadaoMonitoredStore,
+  ): Promise<string> {
+    await page.goto(store.finalPageUrl);
+    await page.waitForTimeout(input.settleDelayMs);
+    await page.dismissCookieBanner();
+
+    if (!(await page.isStorePageUnavailable())) {
+      try {
+        await page.waitForStoreLeaflets(store);
+        await page.waitForTimeout(input.settleDelayMs);
+
+        return store.finalPageUrl;
+      } catch (error) {
+        this.logger.warn(
+          'Atacadao direct store URL did not expose leaflets; resolving by directory.',
+          {
+            storeSlug: store.storeSlug,
+            storeName: store.storeName,
+            errorMessage: error instanceof Error ? error.message : 'Unexpected direct URL failure.',
+          },
+        );
+      }
+    } else {
+      this.logger.warn('Atacadao direct store URL is unavailable; resolving by directory.', {
+        storeSlug: store.storeSlug,
+        storeName: store.storeName,
+        sourceUrl: store.finalPageUrl,
+      });
+    }
+
+    const resolvedUrl = await page.resolveStorePageUrl(store);
+
+    if (resolvedUrl === null) {
+      throw new AtacadaoLeafletExtractionError(
+        `Atacadao store ${store.storeName} could not be resolved from the store directory.`,
+      );
+    }
+
+    this.logger.info('Atacadao store URL resolved from directory.', {
+      storeSlug: store.storeSlug,
+      storeName: store.storeName,
+      previousUrl: store.finalPageUrl,
+      resolvedUrl,
+    });
+
+    await page.goto(resolvedUrl);
+    await page.waitForTimeout(input.settleDelayMs);
+    await page.waitForStoreLeaflets({
+      ...store,
+      finalPageUrl: resolvedUrl,
+      storeSlug: extractStoreSlugFromUrl(resolvedUrl),
+    });
+    await page.waitForTimeout(input.settleDelayMs);
+
+    return resolvedUrl;
+  }
+
+  private async extractStoreLeafletsFromCurrentPage(
+    page: AtacadaoLeafletPage,
+    input: ExtractAtacadaoLeafletsInput,
+    store: AtacadaoMonitoredStore,
+  ): Promise<readonly ExtractedAtacadaoPdfLeaflet[]> {
+    await this.expandAllLeaflets(page, input, store);
+
+    const cards = await page.discoverCards();
+    const leaflets: ExtractedAtacadaoPdfLeaflet[] = [];
+
+    for (const card of cards) {
+      await this.captureLeafletCardIfEnabled(page, input, store, card);
+
+      if (card.pdfUrl.trim().length === 0) {
+        throw new AtacadaoLeafletExtractionError(
+          `Atacadao leaflet card ${String(card.cardIndex)} did not expose a PDF URL.`,
+        );
+      }
+
+      leaflets.push({
+        leafletId: createAtacadaoLeafletId(store, card),
+        title: normalizeLeafletTitle(card.title),
+        cardIndex: card.cardIndex,
+        pdfUrl: card.pdfUrl,
+        validityText: card.validityText,
+      });
+    }
+
+    return leaflets;
   }
 
   private async expandAllLeaflets(
@@ -347,6 +413,12 @@ function slugify(value: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+}
+
+function extractStoreSlugFromUrl(value: string): string {
+  const normalizedUrl = value.replace(/\/+$/, '');
+
+  return normalizedUrl.substring(normalizedUrl.lastIndexOf('/') + 1);
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {

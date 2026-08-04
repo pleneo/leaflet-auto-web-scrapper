@@ -24,6 +24,8 @@ export interface AtacadaoLeafletVisualTarget {
 
 export interface AtacadaoLeafletPage {
   goto(url: string): Promise<void>;
+  isStorePageUnavailable(): Promise<boolean>;
+  resolveStorePageUrl(store: AtacadaoMonitoredStore): Promise<string | null>;
   waitForTimeout(timeoutMs: number): Promise<void>;
   dismissCookieBanner(): Promise<void>;
   waitForStoreLeaflets(store: AtacadaoMonitoredStore): Promise<void>;

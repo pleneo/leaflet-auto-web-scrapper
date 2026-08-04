@@ -59,6 +59,7 @@ describe('AtacadaoLeafletExtractor', () => {
       'goto:https://www.atacadao.com.br/loja/ipiranga',
       'wait:0',
       'dismiss-cookie-banner',
+      'is-unavailable:false',
       'wait-store-leaflets:ipiranga',
       'wait:0',
       'has-more:true',
@@ -102,6 +103,111 @@ describe('AtacadaoLeafletExtractor', () => {
     expect(page.actions).not.toContain('target:card:1');
   });
 
+  it('resolves the store URL from the directory when the direct URL is unavailable', async () => {
+    const page = new FakeAtacadaoPage({
+      cards: [
+        {
+          title: 'Resolved Leaflet',
+          cardIndex: 0,
+          pdfUrl: 'https://cdn.example.com/resolved.pdf',
+          validityText: null,
+        },
+      ],
+      moreLeafletsBeforeEmpty: 0,
+      storePageUnavailable: true,
+      resolvedStoreUrl: 'https://www.atacadao.com.br/loja/juzeiro-do-norte-triangulo',
+    });
+    const extractor = createExtractor(new FakeAtacadaoPageFactory([page]));
+
+    const result = await extractor.extract(createInput());
+
+    expect(result.stores[0]?.sourceUrl).toBe(
+      'https://www.atacadao.com.br/loja/juzeiro-do-norte-triangulo',
+    );
+    expect(result.stores[0]?.leaflets[0]?.pdfUrl).toBe('https://cdn.example.com/resolved.pdf');
+    expect(page.actions).toEqual([
+      'goto:https://www.atacadao.com.br/loja/ipiranga',
+      'wait:0',
+      'dismiss-cookie-banner',
+      'is-unavailable:true',
+      'resolve-store-url:ipiranga',
+      'goto:https://www.atacadao.com.br/loja/juzeiro-do-norte-triangulo',
+      'wait:0',
+      'wait-store-leaflets:juzeiro-do-norte-triangulo',
+      'wait:0',
+      'has-more:false',
+      'discover-cards',
+      'close',
+    ]);
+  });
+
+  it('resolves the store URL from the directory when the direct URL has no leaflet section', async () => {
+    const page = new FakeAtacadaoPage({
+      cards: [
+        {
+          title: 'Resolved Leaflet',
+          cardIndex: 0,
+          pdfUrl: 'https://cdn.example.com/resolved.pdf',
+          validityText: null,
+        },
+      ],
+      moreLeafletsBeforeEmpty: 0,
+      failFirstLeafletWait: true,
+      resolvedStoreUrl: 'https://www.atacadao.com.br/loja/savador-pau-da-lima',
+    });
+    const logger = new FakeLogger();
+    const extractor = createExtractor(new FakeAtacadaoPageFactory([page]), undefined, logger);
+
+    const result = await extractor.extract(createInput());
+
+    expect(result.stores[0]?.sourceUrl).toBe(
+      'https://www.atacadao.com.br/loja/savador-pau-da-lima',
+    );
+    expect(logger.warnMessages).toContain(
+      'Atacadao direct store URL did not expose leaflets; resolving by directory.',
+    );
+  });
+
+  it('reports unexpected direct URL failures while resolving through the directory', async () => {
+    const page = new FakeAtacadaoPage({
+      cards: [
+        {
+          title: 'Resolved Leaflet',
+          cardIndex: 0,
+          pdfUrl: 'https://cdn.example.com/resolved.pdf',
+          validityText: null,
+        },
+      ],
+      moreLeafletsBeforeEmpty: 0,
+      failFirstLeafletWaitWithNonError: true,
+      resolvedStoreUrl: 'https://www.atacadao.com.br/loja/savador-pau-da-lima',
+    });
+    const logger = new FakeLogger();
+    const extractor = createExtractor(new FakeAtacadaoPageFactory([page]), undefined, logger);
+
+    const result = await extractor.extract(createInput());
+
+    expect(result.stores[0]?.leaflets).toHaveLength(1);
+    expect(logger.warnContexts[0]?.['errorMessage']).toBe('Unexpected direct URL failure.');
+  });
+
+  it('fails the store when the directory fallback cannot resolve its URL', async () => {
+    const page = new FakeAtacadaoPage({
+      cards: [],
+      moreLeafletsBeforeEmpty: 0,
+      storePageUnavailable: true,
+      resolvedStoreUrl: null,
+    });
+    const extractor = createExtractor(new FakeAtacadaoPageFactory([page]));
+
+    const result = await extractor.extract(createInput());
+
+    expect(result.stores).toEqual([]);
+    expect(result.failedStores[0]?.errorMessage).toBe(
+      'Atacadao store Ipiranga could not be resolved from the store directory.',
+    );
+  });
+
   it('skips show-more capture when visual dataset input has no capture service', async () => {
     const page = new FakeAtacadaoPage({
       cards: [],
@@ -116,6 +222,7 @@ describe('AtacadaoLeafletExtractor', () => {
       'goto:https://www.atacadao.com.br/loja/ipiranga',
       'wait:0',
       'dismiss-cookie-banner',
+      'is-unavailable:false',
       'wait-store-leaflets:ipiranga',
       'wait:0',
       'has-more:true',
@@ -357,16 +464,34 @@ class FakeAtacadaoPage implements AtacadaoLeafletPage {
 
   private readonly neverResolveGoto: boolean;
 
+  private readonly storePageUnavailable: boolean;
+
+  private readonly failFirstLeafletWait: boolean;
+
+  private readonly failFirstLeafletWaitWithNonError: boolean;
+
+  private readonly resolvedStoreUrl: string | null;
+
+  private leafletWaits = 0;
+
   constructor(input: {
     readonly cards: readonly AtacadaoLeafletCard[];
     readonly moreLeafletsBeforeEmpty: number;
     readonly throwNonErrorOnGoto?: boolean;
     readonly neverResolveGoto?: boolean;
+    readonly storePageUnavailable?: boolean;
+    readonly failFirstLeafletWait?: boolean;
+    readonly failFirstLeafletWaitWithNonError?: boolean;
+    readonly resolvedStoreUrl?: string | null;
   }) {
     this.cards = input.cards;
     this.remainingShowMoreClicks = input.moreLeafletsBeforeEmpty;
     this.throwNonErrorOnGoto = input.throwNonErrorOnGoto === true;
     this.neverResolveGoto = input.neverResolveGoto === true;
+    this.storePageUnavailable = input.storePageUnavailable === true;
+    this.failFirstLeafletWait = input.failFirstLeafletWait === true;
+    this.failFirstLeafletWaitWithNonError = input.failFirstLeafletWaitWithNonError === true;
+    this.resolvedStoreUrl = input.resolvedStoreUrl ?? null;
   }
 
   goto(url: string): Promise<void> {
@@ -384,6 +509,16 @@ class FakeAtacadaoPage implements AtacadaoLeafletPage {
     return Promise.resolve();
   }
 
+  isStorePageUnavailable(): Promise<boolean> {
+    this.actions.push(`is-unavailable:${String(this.storePageUnavailable)}`);
+    return Promise.resolve(this.storePageUnavailable);
+  }
+
+  resolveStorePageUrl(store: AtacadaoMonitoredStore): Promise<string | null> {
+    this.actions.push(`resolve-store-url:${store.storeSlug}`);
+    return Promise.resolve(this.resolvedStoreUrl);
+  }
+
   waitForTimeout(timeoutMs: number): Promise<void> {
     this.actions.push(`wait:${String(timeoutMs)}`);
     return Promise.resolve();
@@ -396,6 +531,17 @@ class FakeAtacadaoPage implements AtacadaoLeafletPage {
 
   waitForStoreLeaflets(store: AtacadaoMonitoredStore): Promise<void> {
     this.actions.push(`wait-store-leaflets:${store.storeSlug}`);
+    this.leafletWaits += 1;
+
+    if (this.failFirstLeafletWait && this.leafletWaits === 1) {
+      return Promise.reject(new Error('Leaflet section was not found.'));
+    }
+
+    if (this.failFirstLeafletWaitWithNonError && this.leafletWaits === 1) {
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- covers defensive non-Error adapter rejection.
+      return Promise.reject('non-error leaflet wait failure');
+    }
+
     return Promise.resolve();
   }
 
@@ -523,6 +669,8 @@ class FakeLogger implements Logger {
 
   readonly warnMessages: string[] = [];
 
+  readonly warnContexts: Record<string, string>[] = [];
+
   debug(): void {
     return undefined;
   }
@@ -531,8 +679,12 @@ class FakeLogger implements Logger {
     this.infoMessages.push(message);
   }
 
-  warn(message: string): void {
+  warn(message: string, context?: Record<string, string>): void {
     this.warnMessages.push(message);
+
+    if (context !== undefined) {
+      this.warnContexts.push(context);
+    }
   }
 
   error(): void {
