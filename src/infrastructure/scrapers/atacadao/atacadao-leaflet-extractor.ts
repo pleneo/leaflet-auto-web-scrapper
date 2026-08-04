@@ -253,7 +253,7 @@ export class AtacadaoLeafletExtractor {
 
     const visualTarget = await page.getShowMoreLeafletsVisualTarget();
 
-    await this.captureBeforeAction(visualTarget, {
+    await this.captureBeforeAction(this.visualDatasetCaptureService, visualTarget, {
       sampleId: `${input.visualDataset.runId}-${store.storeSlug}-show-more-leaflets`,
       runId: input.visualDataset.runId,
       stateName: 'LEAFLETS_PAGE',
@@ -281,7 +281,7 @@ export class AtacadaoLeafletExtractor {
 
     const visualTarget = await page.getLeafletCardVisualTarget(card.cardIndex);
 
-    await this.captureBeforeAction(visualTarget, {
+    await this.captureBeforeAction(this.visualDatasetCaptureService, visualTarget, {
       sampleId: `${input.visualDataset.runId}-${store.storeSlug}-card-${String(card.cardIndex + 1)}`,
       runId: input.visualDataset.runId,
       stateName: 'PDF_DOWNLOAD',
@@ -300,14 +300,11 @@ export class AtacadaoLeafletExtractor {
   }
 
   private async captureBeforeAction(
+    captureService: AtacadaoVisualDatasetCaptureService,
     visualTarget: AtacadaoLeafletVisualTarget,
     input: Omit<CaptureVisualDatasetSampleInput, 'supermarketId' | 'page' | 'target'>,
   ): Promise<void> {
-    if (this.visualDatasetCaptureService === undefined) {
-      return;
-    }
-
-    await this.visualDatasetCaptureService.captureBeforeAction({
+    await captureService.captureBeforeAction({
       ...input,
       supermarketId: 'atacadao',
       page: visualTarget.page,

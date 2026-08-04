@@ -102,6 +102,31 @@ describe('AtacadaoLeafletExtractor', () => {
     expect(page.actions).not.toContain('target:card:1');
   });
 
+  it('skips show-more capture when visual dataset input has no capture service', async () => {
+    const page = new FakeAtacadaoPage({
+      cards: [],
+      moreLeafletsBeforeEmpty: 1,
+    });
+    const extractor = createExtractor(new FakeAtacadaoPageFactory([page]));
+
+    const result = await extractor.extract(createInput({ visualDataset: true }));
+
+    expect(result.stores[0]?.leaflets).toEqual([]);
+    expect(page.actions).toEqual([
+      'goto:https://www.atacadao.com.br/loja/ipiranga',
+      'wait:0',
+      'dismiss-cookie-banner',
+      'wait-store-leaflets:ipiranga',
+      'wait:0',
+      'has-more:true',
+      'show-more',
+      'wait:0',
+      'has-more:false',
+      'discover-cards',
+      'close',
+    ]);
+  });
+
   it('logs stores without leaflets as empty successful stores', async () => {
     const logger = new FakeLogger();
     const extractor = createExtractor(
