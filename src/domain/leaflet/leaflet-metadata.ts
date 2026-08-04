@@ -42,5 +42,20 @@ export interface MixMateusLeafletMetadata {
   readonly storeSlug: string;
 }
 
+export interface AtacadaoLeafletMetadata {
+  readonly metadataKind: 'atacadao';
+  readonly capturedAtIso: string;
+  readonly sourcePageUrl: string;
+  readonly validityStartDateIso: string | null;
+  readonly validityEndDateIso: string | null;
+  readonly city: string;
+  readonly stateCode: string;
+  readonly storeSlug: string;
+}
+
 export type LeafletMetadata =
-  BaseLeafletMetadata | CarnaubaLeafletMetadata | AssaiLeafletMetadata | MixMateusLeafletMetadata;
+  | BaseLeafletMetadata
+  | CarnaubaLeafletMetadata
+  | AssaiLeafletMetadata
+  | MixMateusLeafletMetadata
+  | AtacadaoLeafletMetadata;

@@ -121,6 +121,32 @@ export interface MixMateusPdfDownloadVisualDatasetSubject {
   readonly leafletTitle: string;
 }
 
+export interface AtacadaoStorePageVisualDatasetSubject {
+  readonly subjectKind: 'atacadao-store-page';
+  readonly stateCode: string;
+  readonly cityName: string;
+  readonly storeSlug: string;
+  readonly storeName: string;
+}
+
+export interface AtacadaoShowMoreLeafletsVisualDatasetSubject {
+  readonly subjectKind: 'atacadao-show-more-leaflets';
+  readonly stateCode: string;
+  readonly cityName: string;
+  readonly storeSlug: string;
+  readonly storeName: string;
+}
+
+export interface AtacadaoLeafletCardVisualDatasetSubject {
+  readonly subjectKind: 'atacadao-leaflet-card';
+  readonly stateCode: string;
+  readonly cityName: string;
+  readonly storeSlug: string;
+  readonly storeName: string;
+  readonly cardIndex: number;
+  readonly leafletTitle: string;
+}
+
 export type VisualDatasetSubject =
   | CarnaubaHomeLeafletsLinkVisualDatasetSubject
   | CarnaubaLeafletCardVisualDatasetSubject
@@ -135,7 +161,10 @@ export type VisualDatasetSubject =
   | MixMateusCitySelectionVisualDatasetSubject
   | MixMateusStoreSelectionVisualDatasetSubject
   | MixMateusLeafletCardVisualDatasetSubject
-  | MixMateusPdfDownloadVisualDatasetSubject;
+  | MixMateusPdfDownloadVisualDatasetSubject
+  | AtacadaoStorePageVisualDatasetSubject
+  | AtacadaoShowMoreLeafletsVisualDatasetSubject
+  | AtacadaoLeafletCardVisualDatasetSubject;
 
 export interface VisualDatasetSample {
   readonly sampleId: string;
