@@ -162,11 +162,8 @@ function createStore(
   cityName: string,
   finalPageUrl: string,
 ): AtacadaoMonitoredStore {
-  const storeSlug = finalPageUrl.split('/').filter(Boolean).at(-1);
-
-  if (storeSlug === undefined) {
-    throw new Error(`Invalid Atacadao store URL: ${finalPageUrl}`);
-  }
+  const normalizedUrl = finalPageUrl.replace(/\/+$/, '');
+  const storeSlug = normalizedUrl.substring(normalizedUrl.lastIndexOf('/') + 1);
 
   return {
     stateCode,
