@@ -132,6 +132,11 @@ describe('LocalSharedPdfLeafletStorage', () => {
   });
 
   it('loads valid persistent PDF indexes before downloading', async () => {
+    await mkdir(join(rootDirectory, 'mixmateus/shared-pdfs'), { recursive: true });
+    await writeFile(
+      join(rootDirectory, 'mixmateus/shared-pdfs/cached.pdf'),
+      Uint8Array.of(1, 2, 3),
+    );
     await seedPdfIndex(rootDirectory, {
       version: 1,
       pdfs: [
@@ -152,6 +157,79 @@ describe('LocalSharedPdfLeafletStorage', () => {
     expect(stored.sharedPdfsDownloaded).toBe(0);
     expect(stored.sharedPdfsReused).toBe(2);
     expect(httpClient.downloadedUrls).toEqual([]);
+  });
+
+  it('redownloads when the persistent PDF index points to a missing file', async () => {
+    await seedPdfIndex(rootDirectory, {
+      version: 1,
+      pdfs: [
+        {
+          canonicalUrl: 'https://cdn.example.com/leaflet.pdf',
+          filePath: join(rootDirectory, 'mixmateus/shared-pdfs/missing.pdf'),
+          contentType: 'application/pdf',
+          byteLength: 3,
+          contentHash: createContentHash(Uint8Array.of(1, 2, 3)),
+        },
+      ],
+    });
+    const httpClient = new FakePdfHttpClient();
+    const storage = new LocalSharedPdfLeafletStorage(httpClient);
+
+    const stored = await storage.store(createInput(rootDirectory));
+
+    expect(stored.sharedPdfsDownloaded).toBe(1);
+    expect(stored.sharedPdfsReused).toBe(1);
+    expect(httpClient.downloadedUrls).toEqual(['https://cdn.example.com/leaflet.pdf?cache=abc']);
+  });
+
+  it('redownloads when the persistent PDF index file size is stale', async () => {
+    await mkdir(join(rootDirectory, 'mixmateus/shared-pdfs'), { recursive: true });
+    await writeFile(join(rootDirectory, 'mixmateus/shared-pdfs/stale.pdf'), Uint8Array.of(1, 2));
+    await seedPdfIndex(rootDirectory, {
+      version: 1,
+      pdfs: [
+        {
+          canonicalUrl: 'https://cdn.example.com/leaflet.pdf',
+          filePath: join(rootDirectory, 'mixmateus/shared-pdfs/stale.pdf'),
+          contentType: 'application/pdf',
+          byteLength: 3,
+          contentHash: createContentHash(Uint8Array.of(1, 2, 3)),
+        },
+      ],
+    });
+    const httpClient = new FakePdfHttpClient();
+    const storage = new LocalSharedPdfLeafletStorage(httpClient);
+
+    const stored = await storage.store(createInput(rootDirectory));
+
+    expect(stored.sharedPdfsDownloaded).toBe(1);
+    expect(stored.sharedPdfsReused).toBe(1);
+    expect(httpClient.downloadedUrls).toEqual(['https://cdn.example.com/leaflet.pdf?cache=abc']);
+  });
+
+  it('redownloads when the persistent PDF index file hash is stale', async () => {
+    await mkdir(join(rootDirectory, 'mixmateus/shared-pdfs'), { recursive: true });
+    await writeFile(join(rootDirectory, 'mixmateus/shared-pdfs/stale.pdf'), Uint8Array.of(1, 2, 4));
+    await seedPdfIndex(rootDirectory, {
+      version: 1,
+      pdfs: [
+        {
+          canonicalUrl: 'https://cdn.example.com/leaflet.pdf',
+          filePath: join(rootDirectory, 'mixmateus/shared-pdfs/stale.pdf'),
+          contentType: 'application/pdf',
+          byteLength: 3,
+          contentHash: createContentHash(Uint8Array.of(1, 2, 3)),
+        },
+      ],
+    });
+    const httpClient = new FakePdfHttpClient();
+    const storage = new LocalSharedPdfLeafletStorage(httpClient);
+
+    const stored = await storage.store(createInput(rootDirectory));
+
+    expect(stored.sharedPdfsDownloaded).toBe(1);
+    expect(stored.sharedPdfsReused).toBe(1);
+    expect(httpClient.downloadedUrls).toEqual(['https://cdn.example.com/leaflet.pdf?cache=abc']);
   });
 
   it('uses a fallback directory slug when the unit name has no slug content', async () => {
