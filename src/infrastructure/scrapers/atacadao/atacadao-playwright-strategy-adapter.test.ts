@@ -84,6 +84,34 @@ describe('AtacadaoPlaywrightStrategyAdapter', () => {
     expect(output.datasetSamplesCreated).toBe(0);
   });
 
+  it('reports zero artifact count when storage has no shared leaflet metadata', async () => {
+    const extraction = new FakeExtractionService({
+      source: 'atacadao-playwright',
+      extractedAtIso: '2026-08-04T10:00:00.000Z',
+      stores: [
+        {
+          store: STORE,
+          sourceUrl: STORE.finalPageUrl,
+          leaflets: [
+            {
+              leafletId: 'ipiranga-01-boa-do-dia',
+              title: 'Boa do Dia',
+              cardIndex: 0,
+              pdfUrl: 'https://cdn.example.com/boa.pdf',
+              validityText: null,
+            },
+          ],
+        },
+      ],
+      failedStores: [],
+    });
+    const adapter = createAdapter(extraction, new FakeStorage({ includeSharedLeaflets: false }));
+
+    const output = await adapter.execute(createInput('disabled'));
+
+    expect(output.units[0]?.leaflets[0]?.artifactCount).toBe(0);
+  });
+
   it('reports partial success when some stores fail', async () => {
     const extraction = new FakeExtractionService({
       source: 'atacadao-playwright',
@@ -240,7 +268,13 @@ class FakeExtractionService {
 }
 
 class FakeStorage {
+  private readonly includeSharedLeaflets: boolean;
+
   lastInput: StoreSharedPdfLeafletExtractionInput | undefined;
+
+  constructor(input: { readonly includeSharedLeaflets?: boolean } = {}) {
+    this.includeSharedLeaflets = input.includeSharedLeaflets ?? true;
+  }
 
   store(input: StoreSharedPdfLeafletExtractionInput): Promise<StoredSharedPdfLeafletExtraction> {
     this.lastInput = input;
@@ -270,7 +304,7 @@ class FakeStorage {
         })),
       })),
       sharedLeaflets:
-        input.units[0]?.leaflets.length === 0
+        input.units[0]?.leaflets.length === 0 || !this.includeSharedLeaflets
           ? []
           : [
               {
