@@ -131,7 +131,7 @@ export const ATACADAO_MONITORED_STORES = [
   createStore('SP', 'Sao Paulo', 'https://www.atacadao.com.br/loja/pacaembu'),
   createStore('SP', 'Sao Paulo', 'https://www.atacadao.com.br/loja/indianopolis'),
   createStore('SP', 'Sao Paulo', 'https://www.atacadao.com.br/loja/cambuci'),
-  createStore('SP', 'Sao Paulo', 'https://www.atacadao.com.br/loja/jnaiar-de-souza'),
+  createStore('SP', 'Sao Paulo', 'https://www.atacadao.com.br/loja/inajar-de-souza'),
   createStore('SP', 'Sao Paulo', 'https://www.atacadao.com.br/loja/anchieta'),
   createStore('SP', 'Sao Paulo', 'https://www.atacadao.com.br/loja/rio-das-pedras'),
   createStore('SP', 'Sao Paulo', 'https://www.atacadao.com.br/loja/pirituba'),

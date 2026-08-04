@@ -34,6 +34,13 @@ describe('Atacadao monitored stores', () => {
       storeName: 'Salvador Pau Da Lima',
       finalPageUrl: 'https://www.atacadao.com.br/loja/savador-pau-da-lima',
     });
+    expect(stores).toContainEqual({
+      stateCode: 'SP',
+      cityName: 'Sao Paulo',
+      storeSlug: 'inajar-de-souza',
+      storeName: 'Inajar De Souza',
+      finalPageUrl: 'https://www.atacadao.com.br/loja/inajar-de-souza',
+    });
   });
 
   it('finds monitored stores by normalized final URL', () => {
