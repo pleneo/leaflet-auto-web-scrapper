@@ -20,6 +20,20 @@ describe('Atacadao monitored stores', () => {
       storeName: 'Fortaleza Papicu',
       finalPageUrl: 'https://www.atacadao.com.br/loja/fortaleza-papicu',
     });
+    expect(stores).toContainEqual({
+      stateCode: 'CE',
+      cityName: 'Juazeiro do Norte',
+      storeSlug: 'juzeiro-do-norte-triangulo',
+      storeName: 'Juazeiro Do Norte Triangulo',
+      finalPageUrl: 'https://www.atacadao.com.br/loja/juzeiro-do-norte-triangulo',
+    });
+    expect(stores).toContainEqual({
+      stateCode: 'BA',
+      cityName: 'Salvador',
+      storeSlug: 'savador-pau-da-lima',
+      storeName: 'Salvador Pau Da Lima',
+      finalPageUrl: 'https://www.atacadao.com.br/loja/savador-pau-da-lima',
+    });
   });
 
   it('finds monitored stores by normalized final URL', () => {

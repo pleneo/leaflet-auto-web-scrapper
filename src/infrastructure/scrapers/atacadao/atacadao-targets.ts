@@ -25,7 +25,8 @@ export const ATACADAO_MONITORED_STORES = [
   createStore(
     'CE',
     'Juazeiro do Norte',
-    'https://www.atacadao.com.br/loja/juazeiro-do-norte-triangulo',
+    'https://www.atacadao.com.br/loja/juzeiro-do-norte-triangulo',
+    'Juazeiro Do Norte Triangulo',
   ),
   createStore('CE', 'Juazeiro do Norte', 'https://www.atacadao.com.br/loja/juazeiro-do-norte'),
   createStore('CE', 'Maracanau', 'https://www.atacadao.com.br/loja/maracanau'),
@@ -50,7 +51,12 @@ export const ATACADAO_MONITORED_STORES = [
   createStore('MS', 'Dourados', 'https://www.atacadao.com.br/loja/dourados'),
   createStore('BA', 'Salvador', 'https://www.atacadao.com.br/loja/salvador-barra'),
   createStore('BA', 'Salvador', 'https://www.atacadao.com.br/loja/salvador-pituba'),
-  createStore('BA', 'Salvador', 'https://www.atacadao.com.br/loja/salvador-pau-da-lima'),
+  createStore(
+    'BA',
+    'Salvador',
+    'https://www.atacadao.com.br/loja/savador-pau-da-lima',
+    'Salvador Pau Da Lima',
+  ),
   createStore('BA', 'Salvador', 'https://www.atacadao.com.br/loja/salvador-cabula'),
   createStore('BA', 'Salvador', 'https://www.atacadao.com.br/loja/salvador-brotas'),
   createStore('BA', 'Salvador', 'https://www.atacadao.com.br/loja/salvador-trobogy'),
@@ -161,6 +167,7 @@ function createStore(
   stateCode: AtacadaoStateCode,
   cityName: string,
   finalPageUrl: string,
+  storeName?: string,
 ): AtacadaoMonitoredStore {
   const normalizedUrl = finalPageUrl.replace(/\/+$/, '');
   const storeSlug = normalizedUrl.substring(normalizedUrl.lastIndexOf('/') + 1);
@@ -169,7 +176,7 @@ function createStore(
     stateCode,
     cityName,
     storeSlug,
-    storeName: createStoreName(storeSlug),
+    storeName: storeName ?? createStoreName(storeSlug),
     finalPageUrl,
   };
 }
