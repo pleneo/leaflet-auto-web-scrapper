@@ -1,2 +1,8 @@
 export type SupermarketId =
-  'carnauba' | 'superdopovo' | 'mixmateus' | 'assai' | 'sao-luiz' | 'generic-supermarket';
+  | 'carnauba'
+  | 'superdopovo'
+  | 'mixmateus'
+  | 'atacadao'
+  | 'assai'
+  | 'sao-luiz'
+  | 'generic-supermarket';
