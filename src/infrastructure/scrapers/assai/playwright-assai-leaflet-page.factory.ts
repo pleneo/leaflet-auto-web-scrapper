@@ -341,12 +341,29 @@ async function selectOptionByNormalizedText(select: Locator, expectedText: strin
       throw new Error('Expected Assai selector to be a select element.');
     }
 
-    const expected = normalizeComparableText(rawExpectedText);
-    const option = [...element.options].find((candidateOption) => {
-      return normalizeComparableText(candidateOption.textContent) === expected;
-    });
+    const expected = rawExpectedText
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ');
+    let option: HTMLOptionElement | null = null;
 
-    if (option === undefined) {
+    for (const candidateOption of element.options) {
+      const candidateText = candidateOption.textContent
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ');
+
+      if (candidateText === expected) {
+        option = candidateOption;
+        break;
+      }
+    }
+
+    if (option === null) {
       throw new Error(`Assai selector option was not found: ${rawExpectedText}`);
     }
 
@@ -354,13 +371,4 @@ async function selectOptionByNormalizedText(select: Locator, expectedText: strin
   }, expectedText);
 
   await select.selectOption(optionValue);
-}
-
-function normalizeComparableText(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ');
 }
