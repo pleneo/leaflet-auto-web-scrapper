@@ -64,6 +64,32 @@ describe('AssaiStoreUrlCache', () => {
     });
   });
 
+  it('sorts cache entries by store slug', async () => {
+    const cache = new AssaiStoreUrlCache({ cacheRootDirectory });
+
+    await cache.set({
+      storeSlug: 'assai-vila-sonia',
+      resolvedOfferUrl: 'https://www.assai.com.br/ofertas/sao-paulo/assai-vila-sonia',
+      resolvedAtIso: '2026-08-05T10:00:00.000Z',
+    });
+    await cache.set({
+      storeSlug: 'assai-parangaba',
+      resolvedOfferUrl: 'https://www.assai.com.br/ofertas/ceara/assai-parangaba',
+      resolvedAtIso: '2026-08-05T10:00:00.000Z',
+    });
+
+    await expect(cache.load()).resolves.toMatchObject({
+      entries: [
+        {
+          storeSlug: 'assai-parangaba',
+        },
+        {
+          storeSlug: 'assai-vila-sonia',
+        },
+      ],
+    });
+  });
+
   it('rejects invalid entries and malformed cache files', async () => {
     const cache = new AssaiStoreUrlCache({ cacheRootDirectory });
 
@@ -73,6 +99,11 @@ describe('AssaiStoreUrlCache', () => {
         resolvedOfferUrl: 'https://www.assai.com.br/ofertas/ceara/assai-parangaba',
         resolvedAtIso: '2026-08-05T10:00:00.000Z',
       }),
+    ).rejects.toThrow(AssaiStoreUrlCacheError);
+    await expect(
+      new AssaiStoreUrlCache({
+        cacheRootDirectory: ' ',
+      }).load(),
     ).rejects.toThrow(AssaiStoreUrlCacheError);
     await expect(
       cache.set({
@@ -91,6 +122,32 @@ describe('AssaiStoreUrlCache', () => {
 
     await mkdir(join(cacheRootDirectory, 'assai'), { recursive: true });
     await writeFile(join(cacheRootDirectory, 'assai/store-url-cache.json'), '[]');
+
+    await expect(cache.load()).rejects.toThrow(AssaiStoreUrlCacheError);
+
+    await writeFile(
+      join(cacheRootDirectory, 'assai/store-url-cache.json'),
+      JSON.stringify({
+        version: 2,
+        entries: [],
+      }),
+    );
+
+    await expect(cache.load()).rejects.toThrow(AssaiStoreUrlCacheError);
+
+    await writeFile(
+      join(cacheRootDirectory, 'assai/store-url-cache.json'),
+      JSON.stringify({
+        version: 1,
+        entries: [
+          {
+            storeSlug: 'assai-parangaba',
+            resolvedOfferUrl: 'https://www.assai.com.br/ofertas/ceara/assai-parangaba',
+            resolvedAtIso: 'invalid-date',
+          },
+        ],
+      }),
+    );
 
     await expect(cache.load()).rejects.toThrow(AssaiStoreUrlCacheError);
   });

@@ -455,7 +455,7 @@ class FakeStoreUrlCache implements AssaiStoreUrlCachePort {
 class FailingStoreUrlCache implements AssaiStoreUrlCachePort {
   private readonly failure: Error | null;
 
-  constructor(failure: Error | null) {
+  constructor(failure: Error | null = new Error('Cache write failed.')) {
     this.failure = failure;
   }
 
@@ -612,6 +612,18 @@ class FakeAssaiLeafletPage implements AssaiLeafletPage {
 }
 
 class HangingAssaiLeafletPage extends FakeAssaiLeafletPage {
+  constructor(
+    input: {
+      readonly availableResults: readonly boolean[];
+      readonly currentUrl: string;
+    } = {
+      availableResults: [true],
+      currentUrl: 'https://www.assai.com.br/ofertas/ceara/assai-parangaba',
+    },
+  ) {
+    super(input);
+  }
+
   override waitForLeafletsPage(): Promise<void> {
     return new Promise<void>(() => {
       return;

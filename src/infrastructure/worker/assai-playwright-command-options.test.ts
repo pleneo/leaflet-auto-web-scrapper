@@ -59,13 +59,52 @@ describe('Assai Playwright command options', () => {
     expect(stores.map((store) => store.storeSlug)).toEqual(['assai-parangaba']);
   });
 
+  it('reads env values', () => {
+    const options = parseAssaiPlaywrightCommandOptions([], {
+      ASSAI_OFFER_CATALOG_URL: 'https://www.assai.com.br/catalog.json',
+      ASSAI_PLAYWRIGHT_SETTLE_DELAY_MS: '0',
+      ASSAI_PLAYWRIGHT_DEVICE_SCALE_FACTOR: '2',
+    });
+
+    expect(options.catalogUrl).toBe('https://www.assai.com.br/catalog.json');
+    expect(options.settleDelayMs).toBe(0);
+    expect(options.viewport.deviceScaleFactor).toBe(2);
+  });
+
+  it('accepts every dataset split', () => {
+    expect(
+      parseAssaiPlaywrightCommandOptions(['--assai-visual-dataset-split', 'train'], {})
+        .visualDatasetSplit,
+    ).toBe('train');
+    expect(
+      parseAssaiPlaywrightCommandOptions(['--assai-visual-dataset-split', 'validation'], {})
+        .visualDatasetSplit,
+    ).toBe('validation');
+    expect(
+      parseAssaiPlaywrightCommandOptions(['--assai-visual-dataset-split', 'test'], {})
+        .visualDatasetSplit,
+    ).toBe('test');
+  });
+
   it('rejects invalid arguments', () => {
     expect(() => parseAssaiPlaywrightCommandOptions(['assai-timeout-ms', '1'], {})).toThrow(
+      InvalidAssaiPlaywrightCommandOptionsError,
+    );
+    expect(() => parseAssaiPlaywrightCommandOptions(['--assai-timeout-ms'], {})).toThrow(
+      InvalidAssaiPlaywrightCommandOptionsError,
+    );
+    expect(() => parseAssaiPlaywrightCommandOptions(['--assai-catalog-url', ' '], {})).toThrow(
       InvalidAssaiPlaywrightCommandOptionsError,
     );
     expect(() => parseAssaiPlaywrightCommandOptions(['--assai-timeout-ms', '0'], {})).toThrow(
       InvalidAssaiPlaywrightCommandOptionsError,
     );
+    expect(() => parseAssaiPlaywrightCommandOptions(['--assai-settle-delay-ms', '-1'], {})).toThrow(
+      InvalidAssaiPlaywrightCommandOptionsError,
+    );
+    expect(() =>
+      parseAssaiPlaywrightCommandOptions(['--assai-device-scale-factor', '0'], {}),
+    ).toThrow(InvalidAssaiPlaywrightCommandOptionsError);
     expect(() =>
       parseAssaiPlaywrightCommandOptions(['--assai-visual-dataset-enabled', 'yes'], {}),
     ).toThrow(InvalidAssaiPlaywrightCommandOptionsError);
