@@ -12,6 +12,10 @@ import { ConsoleLogger } from '../logging/console-logger';
 import { JsonLogger } from '../logging/json-logger';
 import { FileSystemExtractionStateRepository } from '../repositories/file-system-extraction-state-repository';
 import { FileSystemVisualDatasetSampleRepository } from '../repositories/file-system-visual-dataset-sample-repository';
+import { AtacadaoLeafletExtractor } from '../scrapers/atacadao/atacadao-leaflet-extractor';
+import { AtacadaoPlaywrightStrategyAdapter } from '../scrapers/atacadao/atacadao-playwright-strategy-adapter';
+import { listAtacadaoMonitoredStores } from '../scrapers/atacadao/atacadao-targets';
+import { PlaywrightAtacadaoLeafletPageFactory } from '../scrapers/atacadao/playwright-atacadao-leaflet-page.factory';
 import { CarnaubaLeafletExtractor } from '../scrapers/carnauba/carnauba-leaflet-extractor';
 import { CarnaubaPlaywrightExtractionService } from '../scrapers/carnauba/carnauba-playwright-extraction';
 import { CarnaubaPlaywrightStrategyAdapter } from '../scrapers/carnauba/carnauba-playwright-strategy-adapter';
@@ -34,6 +38,10 @@ import { LocalCarnaubaPlaywrightLeafletStorage } from '../storage/carnauba-playw
 import { LocalSharedPdfLeafletStorage } from '../storage/leaflet-pdf-storage';
 import { LocalSharedImageGalleryStorage } from '../storage/shared-image-gallery-storage';
 import { SystemClock } from '../time/system-clock';
+import {
+  filterAtacadaoStores,
+  parseAtacadaoPlaywrightCommandOptions,
+} from './atacadao-playwright-command-options';
 import { parseCarnaubaPlaywrightCommandOptions } from './carnauba-playwright-command-options';
 import { parseExtractionWorkerCommandOptions } from './extraction-worker-command-options';
 import { parseMixMateusPlaywrightCommandOptions } from './mixmateus-playwright-command-options';
@@ -61,6 +69,7 @@ async function run(): Promise<void> {
     process.argv.slice(2),
     process.env,
   );
+  const atacadaoOptions = parseAtacadaoPlaywrightCommandOptions(process.argv.slice(2), process.env);
   const logger = createLogger(process.env);
   const clock = new SystemClock();
   const visualDatasetRootDirectory = resolve(
@@ -103,11 +112,21 @@ async function run(): Promise<void> {
           intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
           maxAttempts: 1,
         }),
+        createExtractionTarget({
+          targetId: 'atacadao',
+          supermarketId: 'atacadao',
+          supermarketName: 'Atacadão',
+          mode: 'playwright',
+          enabled: true,
+          intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
+          maxAttempts: 1,
+        }),
       ]),
       strategyRegistry: new PlaywrightStrategyRegistry([
         createCarnaubaStrategy(carnaubaOptions, visualDatasetRootDirectory, clock, logger),
         createSuperDoPovoStrategy(superDoPovoOptions, visualDatasetRootDirectory, clock, logger),
         createMixMateusStrategy(mixMateusOptions, visualDatasetRootDirectory, clock, logger),
+        createAtacadaoStrategy(atacadaoOptions, visualDatasetRootDirectory, clock, logger),
       ]),
       lock: new InMemoryExtractionLock(),
       stateService: new ExtractionStateService(
@@ -284,6 +303,50 @@ function createMixMateusStrategy(
       extractionInput: {
         homeUrl: options.siteBaseUrl,
         stores: listMixMateusMonitoredStores(),
+        viewport: options.viewport,
+        timeoutMs: options.timeoutMs,
+        storeTimeoutMs: options.storeTimeoutMs,
+        maxStoreAttempts: options.maxStoreAttempts,
+        settleDelayMs: options.settleDelayMs,
+      },
+      outputRootDirectory: resolve(process.cwd(), options.outputRootDirectory),
+      visualDatasetRootDirectory,
+      visualDatasetSplit: options.visualDatasetSplit,
+    },
+    {
+      extractionService,
+      storage: new LocalSharedPdfLeafletStorage(new FetchLeafletPdfHttpClient()),
+      countVisualDatasetSamples,
+    },
+  );
+}
+
+function createAtacadaoStrategy(
+  options: ReturnType<typeof parseAtacadaoPlaywrightCommandOptions>,
+  visualDatasetRootDirectory: string,
+  clock: SystemClock,
+  logger: Logger,
+): AtacadaoPlaywrightStrategyAdapter {
+  const visualDatasetCaptureService =
+    options.visualDatasetEnabled && visualDatasetRootDirectory.trim().length > 0
+      ? new VisualDatasetCaptureService(
+          new FileSystemVisualDatasetSampleRepository({
+            rootDirectory: visualDatasetRootDirectory,
+          }),
+          clock,
+        )
+      : undefined;
+  const extractionService = new AtacadaoLeafletExtractor(
+    new PlaywrightAtacadaoLeafletPageFactory(),
+    clock,
+    logger,
+    visualDatasetCaptureService,
+  );
+
+  return new AtacadaoPlaywrightStrategyAdapter(
+    {
+      extractionInput: {
+        stores: filterAtacadaoStores(listAtacadaoMonitoredStores(), options),
         viewport: options.viewport,
         timeoutMs: options.timeoutMs,
         storeTimeoutMs: options.storeTimeoutMs,

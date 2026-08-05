@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SupermarketId } from '../../domain/supermarket/supermarket-id';
 
@@ -265,12 +265,16 @@ export class LocalSharedPdfLeafletStorage {
     const canonicalUrl = canonicalizePdfUrl(sourceUrl);
     const cachedPdf = pdfCache.get(canonicalUrl);
 
-    if (cachedPdf !== undefined) {
+    if (cachedPdf !== undefined && (await cachedPdfExists(cachedPdf))) {
       counters.sharedPdfsReused += 1;
       return {
         sourceUrl,
         ...cachedPdf,
       };
+    }
+
+    if (cachedPdf !== undefined) {
+      pdfCache.delete(canonicalUrl);
     }
 
     const downloadedPdf = await this.httpClient.downloadPdf(sourceUrl);
@@ -292,6 +296,23 @@ export class LocalSharedPdfLeafletStorage {
       sourceUrl,
       ...cached,
     };
+  }
+}
+
+async function cachedPdfExists(pdf: CachedSharedPdf): Promise<boolean> {
+  try {
+    const fileStats = await stat(pdf.filePath);
+
+    if (!fileStats.isFile() || fileStats.size !== pdf.byteLength) {
+      return false;
+    }
+
+    const body = await readFile(pdf.filePath);
+    const contentHash = createHash('sha256').update(body).digest('hex');
+
+    return contentHash === pdf.contentHash;
+  } catch {
+    return false;
   }
 }
 

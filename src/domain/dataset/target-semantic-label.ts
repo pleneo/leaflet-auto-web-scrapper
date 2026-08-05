@@ -7,6 +7,7 @@ export type TargetSemanticLabel =
   | 'select_city_button'
   | 'select_store_button'
   | 'select_region_button'
+  | 'show_more_leaflets_button'
   | 'extract_leaflet_image'
   | 'next_gallery_image_button'
   | 'previous_gallery_image_button'
