@@ -31,6 +31,8 @@ export default defineConfig({
         'src/infrastructure/scrapers/mixmateus/mixmateus-leaflet-page.ts',
         'src/infrastructure/scrapers/mixmateus/mixmateus-pdf-leaflet.ts',
         'src/infrastructure/scrapers/mixmateus/playwright-mixmateus-leaflet-page.factory.ts',
+        'src/infrastructure/scrapers/assai/assai-image-gallery-leaflet.ts',
+        'src/infrastructure/scrapers/assai/assai-leaflet-page.ts',
         'src/infrastructure/scrapers/atacadao/atacadao-leaflet-page.ts',
         'src/infrastructure/scrapers/atacadao/atacadao-pdf-leaflet.ts',
         'src/infrastructure/scrapers/atacadao/playwright-atacadao-leaflet-page.factory.ts',
