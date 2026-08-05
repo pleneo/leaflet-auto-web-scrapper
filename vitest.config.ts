@@ -45,6 +45,7 @@ export default defineConfig({
         'src/infrastructure/storage/fetch-leaflet-pdf-http-client.ts',
         'src/infrastructure/worker/carnauba-api-extract-command.ts',
         'src/infrastructure/worker/atacadao-playwright-command.ts',
+        'src/infrastructure/worker/assai-playwright-command.ts',
         'src/infrastructure/worker/carnauba-leaflets-smoke-command.ts',
         'src/infrastructure/worker/carnauba-playwright-command.ts',
         'src/infrastructure/worker/extraction-worker-command.ts',
