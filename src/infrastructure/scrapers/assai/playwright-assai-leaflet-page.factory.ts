@@ -110,15 +110,31 @@ class PlaywrightAssaiLeafletPage implements AssaiLeafletPage {
   }
 
   async dismissCookieBanner(): Promise<void> {
-    const consentButton = this.page
-      .getByRole('button', {
-        name: /aceitar todos|aceitar|entendi|ok/i,
-      })
-      .first();
+    const cookieControls = [
+      this.page.locator('#onetrust-accept-btn-handler').first(),
+      this.page.locator('#accept-recommended-btn-handler').first(),
+      this.page
+        .getByRole('button', {
+          name: /aceitar todos|aceitar|entendi|ok/i,
+        })
+        .first(),
+      this.page.locator('#close-pc-btn-handler').first(),
+    ];
 
-    if (await consentButton.isVisible({ timeout: 1_000 }).catch(() => false)) {
-      await consentButton.click({
-        timeout: this.timeoutMs,
+    for (const control of cookieControls) {
+      if (await control.isVisible({ timeout: 1_000 }).catch(() => false)) {
+        await control.click({
+          timeout: this.timeoutMs,
+        });
+        await this.page.waitForTimeout(500);
+      }
+    }
+
+    const overlay = this.page.locator('#onetrust-consent-sdk').first();
+
+    if (await overlay.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await overlay.evaluate((element) => {
+        element.remove();
       });
     }
   }

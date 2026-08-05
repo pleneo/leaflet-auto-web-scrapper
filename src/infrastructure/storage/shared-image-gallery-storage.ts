@@ -130,6 +130,7 @@ export class LocalSharedImageGalleryStorage {
     const directoryPath = buildExtractionDirectoryPath(input);
     const sharedImagesDirectoryPath = buildSharedImagesDirectoryPath(input);
     const sharedLeafletsDirectoryPath = buildSharedLeafletsDirectoryPath(input);
+    await mkdir(directoryPath, { recursive: true });
     await mkdir(sharedImagesDirectoryPath, { recursive: true });
     await mkdir(sharedLeafletsDirectoryPath, { recursive: true });
 
