@@ -167,12 +167,7 @@ function parseCatalogStore(response: AssaiCatalogStoreResponse): AssaiCatalogSto
 }
 
 function parseCatalogLeaflet(response: AssaiCatalogLeafletResponse): AssaiCatalogLeafletAssignment {
-  if (
-    response.id === undefined ||
-    response.title === undefined ||
-    response.lojas === undefined ||
-    response.images === undefined
-  ) {
+  if (response.lojas === undefined || response.images === undefined) {
     throw new AssaiOfferCatalogError('Invalid Assai catalog leaflet response.');
   }
 
@@ -183,8 +178,13 @@ function parseCatalogLeaflet(response: AssaiCatalogLeafletResponse): AssaiCatalo
   }
 
   return {
-    leafletId: String(response.id_oferta ?? response.id),
-    title: response.title.trim().length > 0 ? response.title.trim() : 'Jornal de Ofertas',
+    leafletId: String(
+      response.id_oferta ?? response.id ?? slugify(response.title ?? 'jornal-de-ofertas'),
+    ),
+    title:
+      response.title !== undefined && response.title.trim().length > 0
+        ? response.title.trim()
+        : 'Jornal de Ofertas',
     startDateIso: response.start_date ?? null,
     endDateIso: response.end_date ?? null,
     lojaIds: response.lojas.map((store) => store.loja_id).filter(isNumber),
@@ -226,4 +226,16 @@ function normalizeComparableValue(value: string): string {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ');
+}
+
+function slugify(value: string): string {
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return slug.length > 0 ? slug : 'jornal-de-ofertas';
 }

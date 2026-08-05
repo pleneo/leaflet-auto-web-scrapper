@@ -231,6 +231,76 @@ describe('Assai offer catalog', () => {
     expect(() => parseAssaiOfferCatalogResponse({})).toThrow(AssaiOfferCatalogError);
   });
 
+  it('creates a deterministic leaflet id when the catalog id is absent', () => {
+    const catalog = parseAssaiOfferCatalogResponse({
+      lojas: [
+        {
+          loja_id: 10,
+          tid: 20,
+          nid: 30,
+          name: 'Assaí Parangaba',
+          url: '/ofertas/ceara/assai-parangaba',
+        },
+      ],
+      ofertas: [
+        {
+          title: 'Preços válidos para Ceará',
+          lojas: [{ loja_id: 10 }],
+          images: [{ url: 'https://cdn.example/page-1.jpeg' }],
+        },
+      ],
+    });
+
+    expect(catalog.leaflets[0]?.leafletId).toBe('precos-validos-para-ceara');
+  });
+
+  it('uses the default leaflet id when catalog id and title are absent', () => {
+    const catalog = parseAssaiOfferCatalogResponse({
+      lojas: [
+        {
+          loja_id: 10,
+          tid: 20,
+          nid: 30,
+          name: 'Assaí Parangaba',
+          url: '/ofertas/ceara/assai-parangaba',
+        },
+      ],
+      ofertas: [
+        {
+          lojas: [{ loja_id: 10 }],
+          images: [{ url: 'https://cdn.example/page-1.jpeg' }],
+        },
+      ],
+    });
+
+    expect(catalog.leaflets[0]?.leafletId).toBe('jornal-de-ofertas');
+    expect(catalog.leaflets[0]?.title).toBe('Jornal de Ofertas');
+  });
+
+  it('uses the default leaflet id when the title cannot be slugified', () => {
+    const catalog = parseAssaiOfferCatalogResponse({
+      lojas: [
+        {
+          loja_id: 10,
+          tid: 20,
+          nid: 30,
+          name: 'Assaí Parangaba',
+          url: '/ofertas/ceara/assai-parangaba',
+        },
+      ],
+      ofertas: [
+        {
+          title: '!!!',
+          lojas: [{ loja_id: 10 }],
+          images: [{ url: 'https://cdn.example/page-1.jpeg' }],
+        },
+      ],
+    });
+
+    expect(catalog.leaflets[0]?.leafletId).toBe('jornal-de-ofertas');
+    expect(catalog.leaflets[0]?.title).toBe('!!!');
+  });
+
   it('rejects invalid store and leaflet entries', () => {
     expect(() =>
       parseAssaiOfferCatalogResponse({
