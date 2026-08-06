@@ -186,7 +186,8 @@ export class AssaiLeafletExtractor {
           attempts: attempt,
         };
       } catch (error) {
-        lastErrorMessage = toErrorMessage(error as Error);
+        lastErrorMessage =
+          error instanceof Error ? error.message : 'Unexpected Assai store extraction failure.';
         this.logger.warn('Assai store extraction attempt failed.', {
           storeSlug: store.storeSlug,
           storeName: store.storeName,
@@ -386,7 +387,8 @@ export class AssaiLeafletExtractor {
     } catch (error) {
       this.logger.warn('Assai resolved store URL could not be cached.', {
         storeSlug: store.storeSlug,
-        errorMessage: toErrorMessage(error as Error),
+        errorMessage:
+          error instanceof Error ? error.message : 'Unexpected cache persistence failure.',
       });
     }
   }
@@ -590,10 +592,6 @@ function slugify(value: string): string {
 
 function isNonNullString(value: string | null): value is string {
   return value !== null;
-}
-
-function toErrorMessage(error: Error): string {
-  return error.message;
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {

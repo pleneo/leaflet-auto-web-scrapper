@@ -216,9 +216,6 @@ describe('AssaiLeafletExtractor', () => {
     expect(result.failedStores).toEqual([]);
   });
 
-<<<<<<< HEAD
-  it('tries an absolute catalog offer URL when the initial page is stale', async () => {
-=======
   it('keeps catalog extraction when a leaflet has no matching visible tab', async () => {
     const page = new FakeAssaiLeafletPage({
       availableResults: [true],
@@ -290,8 +287,7 @@ describe('AssaiLeafletExtractor', () => {
     );
   });
 
-  it('uses the absolute catalog URL when the initial URL is unavailable', async () => {
->>>>>>> 40429c9 (fix(assai-extraction): tolerate region selectors and hidden leaflet tabs)
+  it('tries an absolute catalog offer URL when the initial page is stale', async () => {
     const page = new FakeAssaiLeafletPage({
       availableResults: [false, true],
       currentUrl: 'https://www.assai.com.br/ofertas/catalogo/assai-parangaba',
@@ -768,7 +764,6 @@ class NullLogger implements Logger {
   }
 }
 
-<<<<<<< HEAD
 class RecordingLogger extends NullLogger {
   readonly warnMessages: string[] = [];
 
@@ -783,13 +778,10 @@ class RecordingLogger extends NullLogger {
   }
 }
 
-function createVisualTarget(locatorDescription: string): AssaiLeafletVisualTarget {
-=======
 function createVisualTarget(
   locatorDescription: string,
   isVisible = true,
 ): AssaiLeafletVisualTarget {
->>>>>>> 40429c9 (fix(assai-extraction): tolerate region selectors and hidden leaflet tabs)
   return {
     page: createPage(),
     target: createTarget(locatorDescription, isVisible),
