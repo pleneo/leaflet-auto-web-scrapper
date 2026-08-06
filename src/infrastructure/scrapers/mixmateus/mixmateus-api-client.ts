@@ -10,45 +10,17 @@ import type {
   MixMateusStoreCatalogProvider,
 } from './mixmateus-api-types';
 
-type MixMateusApiResourceField = string | number | null | undefined;
+type JsonPrimitive = string | number | boolean | null;
+type JsonValue = JsonPrimitive | JsonObject | readonly JsonValue[];
 
-type MixMateusApiResourceResponse = Readonly<Record<string, MixMateusApiResourceField>>;
+interface JsonObject {
+  readonly [key: string]: JsonValue | undefined;
+}
 
 interface MixMateusApiEnvelopeResponse {
-  readonly status?: string;
-  readonly data?: readonly MixMateusApiResourceResponse[];
-  readonly count?: number;
-}
-
-interface MixMateusStateResponse {
-  readonly sigla?: string;
-  readonly descricao?: string;
-}
-
-interface MixMateusCityResponse {
-  readonly idcidade?: string;
-  readonly estado?: string;
-  readonly descricao?: string;
-}
-
-interface MixMateusStoreResponse {
-  readonly idloja?: string;
-  readonly cidade?: string;
-  readonly nome_exibicao?: string;
-  readonly endereco?: string;
-  readonly mapa?: string;
-  readonly marca?: string;
-}
-
-interface MixMateusLeafletResponse {
-  readonly id_encarte?: number;
-  readonly descricao?: string;
-  readonly arquivo?: string;
-  readonly marca?: string;
-  readonly validade?: string;
-  readonly valido?: string;
-  readonly inicio?: string;
-  readonly inicial?: string;
+  readonly status: string;
+  readonly data: readonly JsonObject[];
+  readonly count: number | null;
 }
 
 export interface MixMateusApiClientConfig {
@@ -68,9 +40,7 @@ export class MixMateusApiClient
   private readonly fetcher: typeof fetch;
 
   constructor(config: MixMateusApiClientConfig) {
-    validateAbsoluteUrl(config.baseUrl, 'baseUrl');
-
-    this.baseUrl = config.baseUrl.replace(/\/+$/, '');
+    this.baseUrl = parseBaseUrl(config.baseUrl, 'baseUrl');
     this.fetcher = config.fetcher ?? fetch;
   }
 
@@ -81,20 +51,23 @@ export class MixMateusApiClient
   async listCities(stateCode: string): Promise<readonly MixMateusApiCity[]> {
     validateNonBlank(stateCode, 'stateCode');
     return this.fetchProxyEndpoint(
-      `/estados/${stateCode.trim().toLowerCase()}/cidades`,
+      `/estados/${encodeEndpointPathSegment(stateCode.trim().toLowerCase())}/cidades`,
       parseCityResponse,
     );
   }
 
   async listStores(citySlug: string): Promise<readonly MixMateusApiStore[]> {
     validateNonBlank(citySlug, 'citySlug');
-    return this.fetchProxyEndpoint(`/cidades/${citySlug.trim()}/lojas`, parseStoreResponse);
+    return this.fetchProxyEndpoint(
+      `/cidades/${encodeEndpointPathSegment(citySlug.trim())}/lojas`,
+      parseStoreResponse,
+    );
   }
 
   async listLeaflets(query: MixMateusLeafletQuery): Promise<readonly MixMateusApiLeaflet[]> {
     validateLeafletQuery(query);
     return this.fetchProxyEndpoint(
-      `/encartes/${query.stateCode.trim().toLowerCase()}/${query.citySlug.trim()}/${query.storeSlug.trim()}?marca=${query.brandCode.trim()}`,
+      `/encartes/${encodeEndpointPathSegment(query.stateCode.trim().toLowerCase())}/${encodeEndpointPathSegment(query.citySlug.trim())}/${encodeEndpointPathSegment(query.storeSlug.trim())}?marca=${encodeEndpointQueryValue(query.brandCode.trim())}`,
       parseLeafletResponse,
     );
   }
@@ -110,7 +83,7 @@ export class MixMateusApiClient
 
   private async fetchProxyEndpoint<TParsed>(
     endpoint: string,
-    parseResponse: (response: MixMateusApiResourceResponse) => TParsed,
+    parseResponse: (response: JsonObject) => TParsed,
   ): Promise<readonly TParsed[]> {
     const url = new URL(`${this.baseUrl}/api-proxy.php`);
 
@@ -140,81 +113,112 @@ export class MixMateusApiClient
 }
 
 function parseApiEnvelope(text: string): MixMateusApiEnvelopeResponse {
-  const parsed = JSON.parse(text) as MixMateusApiEnvelopeResponse;
+  const parsed = JSON.parse(text) as JsonValue;
 
-  return parsed;
-}
+  if (!isJsonObject(parsed) || typeof parsed['status'] !== 'string') {
+    throw new Error('Invalid Mix Mateus API response envelope.');
+  }
 
-export function parseStateResponse(response: MixMateusStateResponse): MixMateusApiState {
-  if (response.sigla === undefined || response.descricao === undefined) {
-    throw new Error('Invalid Mix Mateus state response.');
+  const data = parsed['data'];
+
+  if (!isJsonArray(data) || !data.every(isJsonObject)) {
+    throw new Error('Invalid Mix Mateus API response envelope.');
+  }
+
+  const count = parsed['count'];
+
+  if (count !== undefined && count !== null && typeof count !== 'number') {
+    throw new Error('Invalid Mix Mateus API response envelope.');
   }
 
   return {
-    stateCode: response.sigla.trim().toUpperCase(),
-    name: response.descricao.trim(),
+    status: parsed['status'],
+    data,
+    count: count ?? null,
   };
 }
 
-export function parseCityResponse(response: MixMateusCityResponse): MixMateusApiCity {
-  if (
-    response.idcidade === undefined ||
-    response.estado === undefined ||
-    response.descricao === undefined
-  ) {
-    throw new Error('Invalid Mix Mateus city response.');
-  }
+export function parseStateResponse(response: JsonObject): MixMateusApiState {
+  const stateCode = readRequiredString(response, 'sigla', 'Invalid Mix Mateus state response.');
+  const name = readRequiredString(response, 'descricao', 'Invalid Mix Mateus state response.');
 
   return {
-    citySlug: response.idcidade.trim(),
-    stateCode: response.estado.trim().toUpperCase(),
-    name: response.descricao.trim(),
+    stateCode: stateCode.toUpperCase(),
+    name,
   };
 }
 
-export function parseStoreResponse(response: MixMateusStoreResponse): MixMateusApiStore {
-  if (
-    response.idloja === undefined ||
-    response.cidade === undefined ||
-    response.nome_exibicao === undefined ||
-    response.marca === undefined
-  ) {
-    throw new Error('Invalid Mix Mateus store response.');
-  }
+export function parseCityResponse(response: JsonObject): MixMateusApiCity {
+  const citySlug = readRequiredString(response, 'idcidade', 'Invalid Mix Mateus city response.');
+  const stateCode = readRequiredString(response, 'estado', 'Invalid Mix Mateus city response.');
+  const name = readRequiredString(response, 'descricao', 'Invalid Mix Mateus city response.');
 
   return {
-    storeSlug: response.idloja.trim(),
-    citySlug: response.cidade.trim(),
-    displayName: response.nome_exibicao.trim(),
-    address: response.endereco?.trim() ?? '',
-    mapReference: response.mapa?.trim() ?? '',
-    brandCode: response.marca.trim(),
+    citySlug,
+    stateCode: stateCode.toUpperCase(),
+    name,
   };
 }
 
-export function parseLeafletResponse(response: MixMateusLeafletResponse): MixMateusApiLeaflet {
-  if (
-    response.id_encarte === undefined ||
-    response.descricao === undefined ||
-    response.arquivo === undefined ||
-    response.marca === undefined ||
-    response.validade === undefined ||
-    response.valido === undefined ||
-    response.inicio === undefined ||
-    response.inicial === undefined
-  ) {
-    throw new Error('Invalid Mix Mateus leaflet response.');
-  }
+export function parseStoreResponse(response: JsonObject): MixMateusApiStore {
+  const storeSlug = readRequiredString(response, 'idloja', 'Invalid Mix Mateus store response.');
+  const citySlug = readRequiredString(response, 'cidade', 'Invalid Mix Mateus store response.');
+  const displayName = readRequiredString(
+    response,
+    'nome_exibicao',
+    'Invalid Mix Mateus store response.',
+  );
+  const brandCode = readRequiredString(response, 'marca', 'Invalid Mix Mateus store response.');
 
   return {
-    leafletId: response.id_encarte,
-    title: response.descricao.trim(),
-    filePath: response.arquivo.trim(),
-    brandCode: response.marca.trim(),
-    validUntilIso: response.validade.trim(),
-    validUntilText: response.valido.trim(),
-    startsAtIso: response.inicio.trim(),
-    startsAtText: response.inicial.trim(),
+    storeSlug,
+    citySlug,
+    displayName,
+    address: readOptionalString(response, 'endereco', 'Invalid Mix Mateus store response.'),
+    mapReference: readOptionalString(response, 'mapa', 'Invalid Mix Mateus store response.'),
+    brandCode,
+  };
+}
+
+export function parseLeafletResponse(response: JsonObject): MixMateusApiLeaflet {
+  const leafletId = readRequiredNumber(
+    response,
+    'id_encarte',
+    'Invalid Mix Mateus leaflet response.',
+  );
+  const title = readRequiredString(response, 'descricao', 'Invalid Mix Mateus leaflet response.');
+  const filePath = readRequiredString(response, 'arquivo', 'Invalid Mix Mateus leaflet response.');
+  const brandCode = readRequiredString(response, 'marca', 'Invalid Mix Mateus leaflet response.');
+  const validUntilIso = readRequiredString(
+    response,
+    'validade',
+    'Invalid Mix Mateus leaflet response.',
+  );
+  const validUntilText = readRequiredString(
+    response,
+    'valido',
+    'Invalid Mix Mateus leaflet response.',
+  );
+  const startsAtIso = readRequiredString(
+    response,
+    'inicio',
+    'Invalid Mix Mateus leaflet response.',
+  );
+  const startsAtText = readRequiredString(
+    response,
+    'inicial',
+    'Invalid Mix Mateus leaflet response.',
+  );
+
+  return {
+    leafletId,
+    title,
+    filePath,
+    brandCode,
+    validUntilIso,
+    validUntilText,
+    startsAtIso,
+    startsAtText,
   };
 }
 
@@ -225,16 +229,82 @@ function validateLeafletQuery(query: MixMateusLeafletQuery): void {
   validateNonBlank(query.brandCode, 'brandCode');
 }
 
-function validateAbsoluteUrl(value: string, fieldName: string): void {
+function parseBaseUrl(value: string, fieldName: string): string {
+  let url: URL;
+
   try {
-    new URL(value);
+    url = new URL(value);
   } catch {
     throw new Error(`${fieldName} must be absolute and valid.`);
   }
+
+  if (
+    !['http:', 'https:'].includes(url.protocol) ||
+    url.username.length > 0 ||
+    url.password.length > 0 ||
+    url.search.length > 0 ||
+    url.hash.length > 0
+  ) {
+    throw new Error(
+      `${fieldName} must be an absolute http(s) URL without credentials, query, or fragment.`,
+    );
+  }
+
+  return url.toString().replace(/\/+$/, '');
 }
 
 function validateNonBlank(value: string, fieldName: string): void {
   if (value.trim().length === 0) {
     throw new Error(`${fieldName} cannot be blank.`);
   }
+}
+
+function encodeEndpointPathSegment(value: string): string {
+  return encodeURIComponent(value);
+}
+
+function encodeEndpointQueryValue(value: string): string {
+  return encodeURIComponent(value);
+}
+
+function readRequiredString(response: JsonObject, fieldName: string, errorMessage: string): string {
+  const value = response[fieldName];
+
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(errorMessage);
+  }
+
+  return value.trim();
+}
+
+function readOptionalString(response: JsonObject, fieldName: string, errorMessage: string): string {
+  const value = response[fieldName];
+
+  if (value === undefined || value === null) {
+    return '';
+  }
+
+  if (typeof value !== 'string') {
+    throw new Error(errorMessage);
+  }
+
+  return value.trim();
+}
+
+function readRequiredNumber(response: JsonObject, fieldName: string, errorMessage: string): number {
+  const value = response[fieldName];
+
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(errorMessage);
+  }
+
+  return value;
+}
+
+function isJsonObject(value: JsonValue): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isJsonArray(value: JsonValue | undefined): value is readonly JsonValue[] {
+  return Array.isArray(value);
 }
