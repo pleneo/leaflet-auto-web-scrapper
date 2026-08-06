@@ -2,9 +2,12 @@ import { readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { Logger } from '../../application/ports/logger';
 import { InMemoryExtractionLock } from '../../application/services/extraction-lock';
+import {
+  createPlaywrightExtractionStrategy,
+  ExtractionStrategyRegistry,
+} from '../../application/services/extraction-strategy-registry';
 import { ExtractionStateService } from '../../application/services/extraction-state-service';
 import { ExtractionTargetRegistry } from '../../application/services/extraction-target-registry';
-import { PlaywrightStrategyRegistry } from '../../application/services/playwright-strategy-registry';
 import { ScheduledExtractionRunner } from '../../application/services/scheduled-extraction-runner';
 import { createExtractionTarget } from '../../domain/extraction/extraction-target';
 import { VisualDatasetCaptureService } from '../../application/services/visual-dataset-capture-service';
@@ -142,12 +145,22 @@ async function run(): Promise<void> {
           maxAttempts: 1,
         }),
       ]),
-      strategyRegistry: new PlaywrightStrategyRegistry([
-        createCarnaubaStrategy(carnaubaOptions, visualDatasetRootDirectory, clock, logger),
-        createSuperDoPovoStrategy(superDoPovoOptions, visualDatasetRootDirectory, clock, logger),
-        createMixMateusStrategy(mixMateusOptions, visualDatasetRootDirectory, clock, logger),
-        createAtacadaoStrategy(atacadaoOptions, visualDatasetRootDirectory, clock, logger),
-        createAssaiStrategy(assaiOptions, visualDatasetRootDirectory, clock, logger),
+      strategyRegistry: new ExtractionStrategyRegistry([
+        createPlaywrightExtractionStrategy(
+          createCarnaubaStrategy(carnaubaOptions, visualDatasetRootDirectory, clock, logger),
+        ),
+        createPlaywrightExtractionStrategy(
+          createSuperDoPovoStrategy(superDoPovoOptions, visualDatasetRootDirectory, clock, logger),
+        ),
+        createPlaywrightExtractionStrategy(
+          createMixMateusStrategy(mixMateusOptions, visualDatasetRootDirectory, clock, logger),
+        ),
+        createPlaywrightExtractionStrategy(
+          createAtacadaoStrategy(atacadaoOptions, visualDatasetRootDirectory, clock, logger),
+        ),
+        createPlaywrightExtractionStrategy(
+          createAssaiStrategy(assaiOptions, visualDatasetRootDirectory, clock, logger),
+        ),
       ]),
       lock: new InMemoryExtractionLock(),
       stateService: new ExtractionStateService(
