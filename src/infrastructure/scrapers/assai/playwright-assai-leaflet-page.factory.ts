@@ -28,6 +28,12 @@ const STATE_LABELS: Readonly<Record<AssaiStateCode, string>> = {
   SP: 'São Paulo',
 };
 
+interface SelectOptionSnapshot {
+  readonly value: string;
+  readonly text: string;
+  readonly disabled: boolean;
+}
+
 export class PlaywrightAssaiLeafletPageFactory implements AssaiLeafletPageFactory {
   async openPage(input: OpenAssaiLeafletPageInput): Promise<AssaiLeafletPage> {
     const browser = await chromium.launch({
@@ -225,7 +231,7 @@ class PlaywrightAssaiLeafletPage implements AssaiLeafletPage {
   }
 
   async selectCity(store: AssaiMonitoredStore): Promise<void> {
-    await selectOptionByNormalizedText(this.citySelectLocator(), store.cityName);
+    await selectStoreRegionOption(this.citySelectLocator(), this.storeSelectLocator(), store);
   }
 
   getStoreSelectVisualTarget(): Promise<AssaiLeafletVisualTarget> {
@@ -235,7 +241,7 @@ class PlaywrightAssaiLeafletPage implements AssaiLeafletPage {
   }
 
   async selectStore(store: AssaiMonitoredStore): Promise<void> {
-    await selectOptionByNormalizedText(this.storeSelectLocator(), store.storeName);
+    await selectOptionByStore(this.storeSelectLocator(), store);
   }
 
   getConfirmStoreVisualTarget(): Promise<AssaiLeafletVisualTarget> {
@@ -251,6 +257,13 @@ class PlaywrightAssaiLeafletPage implements AssaiLeafletPage {
         timeout: this.timeoutMs,
       }),
     ]);
+  }
+
+  async isLeafletTabVisible(tabIndex: number): Promise<boolean> {
+    return this.leafletTabLocator()
+      .nth(tabIndex)
+      .isVisible({ timeout: 1_000 })
+      .catch(() => false);
   }
 
   getLeafletTabVisualTarget(tabIndex: number): Promise<AssaiLeafletVisualTarget> {
@@ -336,39 +349,138 @@ async function selectOptionByNormalizedText(select: Locator, expectedText: strin
   await select.waitFor({
     state: 'visible',
   });
-  const optionValue = await select.evaluate((element, rawExpectedText): string => {
+  const optionValue = findOptionByNormalizedText(await listSelectOptions(select), expectedText);
+
+  if (optionValue === null) {
+    throw new Error(`Assai selector option was not found: ${expectedText}`);
+  }
+
+  await select.selectOption(optionValue);
+}
+
+async function selectStoreRegionOption(
+  regionSelect: Locator,
+  storeSelect: Locator,
+  store: AssaiMonitoredStore,
+): Promise<void> {
+  const isRegionSelectVisible = await regionSelect.isVisible({ timeout: 2_000 }).catch(() => false);
+
+  if (!isRegionSelectVisible) {
+    if (await hasStoreOption(storeSelect, store)) {
+      return;
+    }
+
+    throw new Error(`Assai visible selector path was not found for store: ${store.storeName}`);
+  }
+
+  const directCityValue = findOptionByNormalizedText(
+    await listSelectOptions(regionSelect),
+    store.cityName,
+  );
+
+  if (directCityValue !== null) {
+    await regionSelect.selectOption(directCityValue);
+
+    if (await hasStoreOption(storeSelect, store)) {
+      return;
+    }
+  }
+
+  const options = await listSelectOptions(regionSelect);
+
+  for (const option of options) {
+    if (option.disabled || option.value.trim().length === 0 || option.value === directCityValue) {
+      continue;
+    }
+
+    await regionSelect.selectOption(option.value);
+
+    if (await hasStoreOption(storeSelect, store)) {
+      return;
+    }
+  }
+
+  throw new Error(`Assai selector path was not found for store: ${store.storeName}`);
+}
+
+async function selectOptionByStore(select: Locator, store: AssaiMonitoredStore): Promise<void> {
+  await select.waitFor({
+    state: 'visible',
+  });
+  const options = await listSelectOptions(select);
+  const option = options.find((candidate) => matchesStoreOption(candidate.text, store));
+
+  if (option === undefined) {
+    throw new Error(`Assai store selector option was not found: ${store.storeName}`);
+  }
+
+  await select.selectOption(option.value);
+}
+
+async function hasStoreOption(select: Locator, store: AssaiMonitoredStore): Promise<boolean> {
+  await select.waitFor({
+    state: 'visible',
+  });
+  await select
+    .locator('option')
+    .nth(1)
+    .waitFor({ state: 'attached', timeout: 2_000 })
+    .catch(() => {
+      return undefined;
+    });
+  const options = await listSelectOptions(select);
+
+  return options.some((option) => matchesStoreOption(option.text, store));
+}
+
+async function listSelectOptions(select: Locator): Promise<readonly SelectOptionSnapshot[]> {
+  return select.evaluate((element): readonly SelectOptionSnapshot[] => {
     if (!(element instanceof HTMLSelectElement)) {
       throw new Error('Expected Assai selector to be a select element.');
     }
 
-    const expected = rawExpectedText
-      .trim()
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ');
-    let option: HTMLOptionElement | null = null;
+    return Array.from(element.options).map((option) => ({
+      value: option.value,
+      text: option.textContent.trim(),
+      disabled: option.disabled,
+    }));
+  });
+}
 
-    for (const candidateOption of element.options) {
-      const candidateText = candidateOption.textContent
-        .trim()
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/\s+/g, ' ');
+function findOptionByNormalizedText(
+  options: readonly SelectOptionSnapshot[],
+  expectedText: string,
+): string | null {
+  const expected = normalizeComparableText(expectedText);
+  const option = options.find((candidate) => normalizeComparableText(candidate.text) === expected);
 
-      if (candidateText === expected) {
-        option = candidateOption;
-        break;
-      }
-    }
+  return option?.value ?? null;
+}
 
-    if (option === null) {
-      throw new Error(`Assai selector option was not found: ${rawExpectedText}`);
-    }
+function matchesStoreOption(optionText: string, store: AssaiMonitoredStore): boolean {
+  const candidate = normalizeComparableText(optionText);
+  const storeName = normalizeComparableText(store.storeName);
+  const storeSlug = normalizeComparableText(store.storeSlug.replace(/-/g, ' '));
+  const storeSlugWithoutBrand = normalizeComparableText(
+    store.storeSlug.replace(/^assai-/, '').replace(/-/g, ' '),
+  );
+  const storeNameWithoutBusinessKind = normalizeComparableText(
+    store.storeName.replace(/\bAtacadista\b/gi, ''),
+  );
 
-    return option.value;
-  }, expectedText);
+  return (
+    candidate === storeName ||
+    candidate === storeSlug ||
+    candidate === storeNameWithoutBusinessKind ||
+    candidate.endsWith(` ${storeSlugWithoutBrand}`)
+  );
+}
 
-  await select.selectOption(optionValue);
+function normalizeComparableText(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
 }

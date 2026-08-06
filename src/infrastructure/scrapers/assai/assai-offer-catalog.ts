@@ -171,7 +171,10 @@ function parseCatalogLeaflet(response: AssaiCatalogLeafletResponse): AssaiCatalo
     throw new AssaiOfferCatalogError('Invalid Assai catalog leaflet response.');
   }
 
-  const imageUrls = response.images.map((image) => image.url).filter(isNonBlankString);
+  const imageUrls = response.images
+    .map((image) => image.url)
+    .filter(isNonBlankString)
+    .map(createAbsoluteAssaiAssetUrl);
 
   if (imageUrls.length === 0) {
     throw new AssaiOfferCatalogError(`Assai catalog leaflet ${String(response.id)} has no images.`);
@@ -217,6 +220,24 @@ function isNumber(value: number | undefined): value is number {
 
 function isNonBlankString(value: string | undefined): value is string {
   return value !== undefined && value.trim().length > 0;
+}
+
+function createAbsoluteAssaiAssetUrl(url: string): string {
+  const trimmedUrl = url.trim();
+
+  if (trimmedUrl.startsWith('https://') || trimmedUrl.startsWith('http://')) {
+    return trimmedUrl;
+  }
+
+  if (trimmedUrl.startsWith('//')) {
+    return `https:${trimmedUrl}`;
+  }
+
+  if (trimmedUrl.startsWith('/')) {
+    return `https://www.assai.com.br${trimmedUrl}`;
+  }
+
+  return `https://www.assai.com.br/${trimmedUrl}`;
 }
 
 function normalizeComparableValue(value: string): string {

@@ -216,7 +216,82 @@ describe('AssaiLeafletExtractor', () => {
     expect(result.failedStores).toEqual([]);
   });
 
+<<<<<<< HEAD
   it('tries an absolute catalog offer URL when the initial page is stale', async () => {
+=======
+  it('keeps catalog extraction when a leaflet has no matching visible tab', async () => {
+    const page = new FakeAssaiLeafletPage({
+      availableResults: [true],
+      currentUrl: 'https://www.assai.com.br/ofertas/ceara/assai-parangaba',
+      visibleLeafletTabCount: 1,
+    });
+    const captureService = new RecordingCaptureService();
+    const extractor = createExtractor({
+      page,
+      captureService,
+      catalog: {
+        stores: [createCatalogStore()],
+        leaflets: [
+          ...createCatalog().leaflets,
+          {
+            leafletId: '201',
+            title: 'Jornal de Ofertas 2',
+            startDateIso: '2026-07-20',
+            endDateIso: '2026-07-23',
+            lojaIds: [10],
+            tids: [],
+            nids: [],
+            imageUrls: ['https://cdn.example/page-3.jpeg'],
+          },
+        ],
+      },
+    });
+
+    const result = await extractor.extract(
+      createInput({
+        visualDataset: {
+          runId: 'run-1',
+          split: 'unassigned',
+        },
+      }),
+    );
+
+    expect(result.failedStores).toEqual([]);
+    expect(result.stores[0]?.leaflets).toHaveLength(2);
+    expect(page.calls).toContain('open-leaflet-tab:0');
+    expect(page.calls).not.toContain('open-leaflet-tab:1');
+    expect(captureService.inputs.map((input) => input.sampleId)).toEqual([
+      'run-1-assai-parangaba-leaflet-tab-1',
+      'run-1-assai-parangaba-download-image-1',
+    ]);
+  });
+
+  it('skips an invisible visual target without failing the store extraction', async () => {
+    const page = new FakeAssaiLeafletPage({
+      availableResults: [false, false],
+      currentUrl: 'https://www.assai.com.br/ofertas/ceara/assai-parangaba',
+      invisibleVisualTargets: ['city-select'],
+    });
+    const captureService = new RecordingCaptureService();
+    const extractor = createExtractor({ page, captureService });
+
+    const result = await extractor.extract(
+      createInput({
+        visualDataset: {
+          runId: 'run-1',
+          split: 'unassigned',
+        },
+      }),
+    );
+
+    expect(result.failedStores).toEqual([]);
+    expect(captureService.inputs.map((input) => input.sampleId)).not.toContain(
+      'run-1-assai-parangaba-select-city',
+    );
+  });
+
+  it('uses the absolute catalog URL when the initial URL is unavailable', async () => {
+>>>>>>> 40429c9 (fix(assai-extraction): tolerate region selectors and hidden leaflet tabs)
     const page = new FakeAssaiLeafletPage({
       availableResults: [false, true],
       currentUrl: 'https://www.assai.com.br/ofertas/catalogo/assai-parangaba',
@@ -484,12 +559,20 @@ class FakeAssaiLeafletPage implements AssaiLeafletPage {
 
   private readonly currentUrl: string;
 
+  private readonly visibleLeafletTabCount: number;
+
+  private readonly invisibleVisualTargets: ReadonlySet<string>;
+
   constructor(input: {
     readonly availableResults: readonly boolean[];
     readonly currentUrl: string;
+    readonly visibleLeafletTabCount?: number;
+    readonly invisibleVisualTargets?: readonly string[];
   }) {
     this.availableResults = [...input.availableResults];
     this.currentUrl = input.currentUrl;
+    this.visibleLeafletTabCount = input.visibleLeafletTabCount ?? Number.POSITIVE_INFINITY;
+    this.invisibleVisualTargets = new Set(input.invisibleVisualTargets ?? []);
   }
 
   goto(url: string): Promise<void> {
@@ -517,7 +600,7 @@ class FakeAssaiLeafletPage implements AssaiLeafletPage {
   }
 
   getOffersLinkVisualTarget(): Promise<AssaiLeafletVisualTarget> {
-    return Promise.resolve(createVisualTarget('offers-link'));
+    return Promise.resolve(this.createVisualTarget('offers-link'));
   }
 
   openOffersPage(): Promise<void> {
@@ -541,7 +624,7 @@ class FakeAssaiLeafletPage implements AssaiLeafletPage {
   }
 
   getChooseStoreVisualTarget(): Promise<AssaiLeafletVisualTarget> {
-    return Promise.resolve(createVisualTarget('choose-store'));
+    return Promise.resolve(this.createVisualTarget('choose-store'));
   }
 
   openStoreSelector(): Promise<void> {
@@ -551,7 +634,7 @@ class FakeAssaiLeafletPage implements AssaiLeafletPage {
   }
 
   getStateSelectVisualTarget(): Promise<AssaiLeafletVisualTarget> {
-    return Promise.resolve(createVisualTarget('state-select'));
+    return Promise.resolve(this.createVisualTarget('state-select'));
   }
 
   selectState(store: AssaiMonitoredStore): Promise<void> {
@@ -561,7 +644,7 @@ class FakeAssaiLeafletPage implements AssaiLeafletPage {
   }
 
   getCitySelectVisualTarget(): Promise<AssaiLeafletVisualTarget> {
-    return Promise.resolve(createVisualTarget('city-select'));
+    return Promise.resolve(this.createVisualTarget('city-select'));
   }
 
   selectCity(store: AssaiMonitoredStore): Promise<void> {
@@ -571,7 +654,7 @@ class FakeAssaiLeafletPage implements AssaiLeafletPage {
   }
 
   getStoreSelectVisualTarget(): Promise<AssaiLeafletVisualTarget> {
-    return Promise.resolve(createVisualTarget('store-select'));
+    return Promise.resolve(this.createVisualTarget('store-select'));
   }
 
   selectStore(store: AssaiMonitoredStore): Promise<void> {
@@ -581,7 +664,7 @@ class FakeAssaiLeafletPage implements AssaiLeafletPage {
   }
 
   getConfirmStoreVisualTarget(): Promise<AssaiLeafletVisualTarget> {
-    return Promise.resolve(createVisualTarget('confirm-store'));
+    return Promise.resolve(this.createVisualTarget('confirm-store'));
   }
 
   confirmStoreSelection(): Promise<void> {
@@ -590,8 +673,12 @@ class FakeAssaiLeafletPage implements AssaiLeafletPage {
     return Promise.resolve();
   }
 
+  isLeafletTabVisible(tabIndex: number): Promise<boolean> {
+    return Promise.resolve(tabIndex < this.visibleLeafletTabCount);
+  }
+
   getLeafletTabVisualTarget(tabIndex: number): Promise<AssaiLeafletVisualTarget> {
-    return Promise.resolve(createVisualTarget(`leaflet-tab-${String(tabIndex)}`));
+    return Promise.resolve(this.createVisualTarget(`leaflet-tab-${String(tabIndex)}`));
   }
 
   openLeafletTab(tabIndex: number): Promise<void> {
@@ -601,13 +688,20 @@ class FakeAssaiLeafletPage implements AssaiLeafletPage {
   }
 
   getDownloadImageVisualTarget(): Promise<AssaiLeafletVisualTarget> {
-    return Promise.resolve(createVisualTarget('download-image'));
+    return Promise.resolve(this.createVisualTarget('download-image'));
   }
 
   close(): Promise<void> {
     this.calls.push('close');
 
     return Promise.resolve();
+  }
+
+  private createVisualTarget(locatorDescription: string): AssaiLeafletVisualTarget {
+    return createVisualTarget(
+      locatorDescription,
+      !this.invisibleVisualTargets.has(locatorDescription),
+    );
   }
 }
 
@@ -674,6 +768,7 @@ class NullLogger implements Logger {
   }
 }
 
+<<<<<<< HEAD
 class RecordingLogger extends NullLogger {
   readonly warnMessages: string[] = [];
 
@@ -689,9 +784,15 @@ class RecordingLogger extends NullLogger {
 }
 
 function createVisualTarget(locatorDescription: string): AssaiLeafletVisualTarget {
+=======
+function createVisualTarget(
+  locatorDescription: string,
+  isVisible = true,
+): AssaiLeafletVisualTarget {
+>>>>>>> 40429c9 (fix(assai-extraction): tolerate region selectors and hidden leaflet tabs)
   return {
     page: createPage(),
-    target: createTarget(locatorDescription),
+    target: createTarget(locatorDescription, isVisible),
   };
 }
 
@@ -717,11 +818,11 @@ function createPage(): VisualDatasetPage {
   };
 }
 
-function createTarget(locatorDescription: string): VisualActionTarget {
+function createTarget(locatorDescription: string, isVisible: boolean): VisualActionTarget {
   return {
     locatorDescription,
     scrollIntoView: () => Promise.resolve(),
-    isVisible: () => Promise.resolve(true),
+    isVisible: () => Promise.resolve(isVisible),
     isEnabled: () => Promise.resolve(true),
     getViewportBoundingBox: () => Promise.resolve(createBox()),
   };

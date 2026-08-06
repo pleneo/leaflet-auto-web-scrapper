@@ -35,6 +35,9 @@ describe('Assai offer catalog', () => {
           images: [
             { url: 'https://cdn.example/page-1.jpeg' },
             { url: 'https://cdn.example/page-1.jpeg' },
+            { url: '/sites/default/files/page-2.jpeg' },
+            { url: '//cdn.example/page-3.jpeg' },
+            { url: 'sites/default/files/page-4.jpeg' },
           ],
         },
       ],
@@ -50,7 +53,12 @@ describe('Assai offer catalog', () => {
         storeSlug: 'assai-parangaba',
       },
     ]);
-    expect(catalog.leaflets[0]?.imageUrls).toEqual(['https://cdn.example/page-1.jpeg']);
+    expect(catalog.leaflets[0]?.imageUrls).toEqual([
+      'https://cdn.example/page-1.jpeg',
+      'https://www.assai.com.br/sites/default/files/page-2.jpeg',
+      'https://cdn.example/page-3.jpeg',
+      'https://www.assai.com.br/sites/default/files/page-4.jpeg',
+    ]);
   });
 
   it('finds the catalog store for a monitored target and lists assigned leaflets', () => {

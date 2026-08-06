@@ -35,6 +35,7 @@ export interface AssaiLeafletPage {
   selectStore(store: AssaiMonitoredStore): Promise<void>;
   getConfirmStoreVisualTarget(): Promise<AssaiLeafletVisualTarget>;
   confirmStoreSelection(): Promise<void>;
+  isLeafletTabVisible(tabIndex: number): Promise<boolean>;
   getLeafletTabVisualTarget(tabIndex: number): Promise<AssaiLeafletVisualTarget>;
   openLeafletTab(tabIndex: number): Promise<void>;
   getDownloadImageVisualTarget(): Promise<AssaiLeafletVisualTarget>;

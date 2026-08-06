@@ -339,10 +339,26 @@ export class AssaiLeafletExtractor {
     const leaflets: ExtractedAssaiImageGalleryLeaflet[] = [];
 
     for (const [index, catalogLeaflet] of catalogLeaflets.entries()) {
-      await this.captureLeafletTabIfEnabled(page, input, store, index);
-      await page.openLeafletTab(index);
-      await page.waitForTimeout(input.settleDelayMs);
-      await this.captureDownloadImageIfEnabled(page, input, store, index);
+      const hasVisibleLeafletTab = await page.isLeafletTabVisible(index);
+
+      if (hasVisibleLeafletTab) {
+        await this.captureLeafletTabIfEnabled(page, input, store, index);
+        await page.openLeafletTab(index);
+        await page.waitForTimeout(input.settleDelayMs);
+        await this.captureDownloadImageIfEnabled(page, input, store, index);
+      } else {
+        this.logger.warn(
+          'Assai catalog leaflet has no matching visible tab; visual capture skipped.',
+          {
+            storeSlug: store.storeSlug,
+            storeName: store.storeName,
+            leafletId: catalogLeaflet.leafletId,
+            leafletTitle: catalogLeaflet.title,
+            tabIndex: index,
+          },
+        );
+      }
+
       leaflets.push({
         leafletId: createAssaiLeafletId(store, catalogLeaflet.leafletId, catalogLeaflet.title),
         title: normalizeLeafletTitle(catalogLeaflet.title),
@@ -492,6 +508,16 @@ export class AssaiLeafletExtractor {
     }
 
     const visualTarget = await visualTargetPromise;
+
+    if (!(await visualTarget.target.isVisible())) {
+      this.logger.warn('Assai visual target is not visible; visual capture skipped.', {
+        storeSlug: store.storeSlug,
+        storeName: store.storeName,
+        sampleSuffix: sample.sampleSuffix,
+        locatorDescription: visualTarget.target.locatorDescription,
+      });
+      return;
+    }
 
     await this.visualDatasetCaptureService.captureBeforeAction({
       sampleId: `${input.visualDataset.runId}-${store.storeSlug}-${sample.sampleSuffix}`,
