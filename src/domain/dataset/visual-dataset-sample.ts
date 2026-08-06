@@ -147,6 +147,15 @@ export interface AtacadaoLeafletCardVisualDatasetSubject {
   readonly leafletTitle: string;
 }
 
+export interface AssaiLeafletFlowVisualDatasetSubject {
+  readonly subjectKind: 'assai-leaflet-flow';
+  readonly stateCode: string;
+  readonly cityName: string;
+  readonly storeSlug: string;
+  readonly storeName: string;
+  readonly targetIndex: number | null;
+}
+
 export type VisualDatasetSubject =
   | CarnaubaHomeLeafletsLinkVisualDatasetSubject
   | CarnaubaLeafletCardVisualDatasetSubject
@@ -164,7 +173,8 @@ export type VisualDatasetSubject =
   | MixMateusPdfDownloadVisualDatasetSubject
   | AtacadaoStorePageVisualDatasetSubject
   | AtacadaoShowMoreLeafletsVisualDatasetSubject
-  | AtacadaoLeafletCardVisualDatasetSubject;
+  | AtacadaoLeafletCardVisualDatasetSubject
+  | AssaiLeafletFlowVisualDatasetSubject;
 
 export interface VisualDatasetSample {
   readonly sampleId: string;

@@ -12,6 +12,12 @@ import { ConsoleLogger } from '../logging/console-logger';
 import { JsonLogger } from '../logging/json-logger';
 import { FileSystemExtractionStateRepository } from '../repositories/file-system-extraction-state-repository';
 import { FileSystemVisualDatasetSampleRepository } from '../repositories/file-system-visual-dataset-sample-repository';
+import { AssaiLeafletExtractor } from '../scrapers/assai/assai-leaflet-extractor';
+import { FetchAssaiOfferCatalogClient } from '../scrapers/assai/assai-offer-catalog';
+import { AssaiPlaywrightStrategyAdapter } from '../scrapers/assai/assai-playwright-strategy-adapter';
+import { AssaiStoreUrlCache } from '../scrapers/assai/assai-store-url-cache';
+import { listAssaiMonitoredStores } from '../scrapers/assai/assai-targets';
+import { PlaywrightAssaiLeafletPageFactory } from '../scrapers/assai/playwright-assai-leaflet-page.factory';
 import { AtacadaoLeafletExtractor } from '../scrapers/atacadao/atacadao-leaflet-extractor';
 import { AtacadaoPlaywrightStrategyAdapter } from '../scrapers/atacadao/atacadao-playwright-strategy-adapter';
 import { listAtacadaoMonitoredStores } from '../scrapers/atacadao/atacadao-targets';
@@ -42,6 +48,10 @@ import {
   filterAtacadaoStores,
   parseAtacadaoPlaywrightCommandOptions,
 } from './atacadao-playwright-command-options';
+import {
+  filterAssaiStores,
+  parseAssaiPlaywrightCommandOptions,
+} from './assai-playwright-command-options';
 import { parseCarnaubaPlaywrightCommandOptions } from './carnauba-playwright-command-options';
 import { parseExtractionWorkerCommandOptions } from './extraction-worker-command-options';
 import { parseMixMateusPlaywrightCommandOptions } from './mixmateus-playwright-command-options';
@@ -70,6 +80,7 @@ async function run(): Promise<void> {
     process.env,
   );
   const atacadaoOptions = parseAtacadaoPlaywrightCommandOptions(process.argv.slice(2), process.env);
+  const assaiOptions = parseAssaiPlaywrightCommandOptions(process.argv.slice(2), process.env);
   const logger = createLogger(process.env);
   const clock = new SystemClock();
   const visualDatasetRootDirectory = resolve(
@@ -121,12 +132,22 @@ async function run(): Promise<void> {
           intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
           maxAttempts: 1,
         }),
+        createExtractionTarget({
+          targetId: 'assai',
+          supermarketId: 'assai',
+          supermarketName: 'Assaí Atacadista',
+          mode: 'playwright',
+          enabled: true,
+          intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
+          maxAttempts: 1,
+        }),
       ]),
       strategyRegistry: new PlaywrightStrategyRegistry([
         createCarnaubaStrategy(carnaubaOptions, visualDatasetRootDirectory, clock, logger),
         createSuperDoPovoStrategy(superDoPovoOptions, visualDatasetRootDirectory, clock, logger),
         createMixMateusStrategy(mixMateusOptions, visualDatasetRootDirectory, clock, logger),
         createAtacadaoStrategy(atacadaoOptions, visualDatasetRootDirectory, clock, logger),
+        createAssaiStrategy(assaiOptions, visualDatasetRootDirectory, clock, logger),
       ]),
       lock: new InMemoryExtractionLock(),
       stateService: new ExtractionStateService(
@@ -360,6 +381,56 @@ function createAtacadaoStrategy(
     {
       extractionService,
       storage: new LocalSharedPdfLeafletStorage(new FetchLeafletPdfHttpClient()),
+      countVisualDatasetSamples,
+    },
+  );
+}
+
+function createAssaiStrategy(
+  options: ReturnType<typeof parseAssaiPlaywrightCommandOptions>,
+  visualDatasetRootDirectory: string,
+  clock: SystemClock,
+  logger: Logger,
+): AssaiPlaywrightStrategyAdapter {
+  const visualDatasetCaptureService =
+    options.visualDatasetEnabled && visualDatasetRootDirectory.trim().length > 0
+      ? new VisualDatasetCaptureService(
+          new FileSystemVisualDatasetSampleRepository({
+            rootDirectory: visualDatasetRootDirectory,
+          }),
+          clock,
+        )
+      : undefined;
+  const extractionService = new AssaiLeafletExtractor(
+    new PlaywrightAssaiLeafletPageFactory(),
+    new FetchAssaiOfferCatalogClient({
+      catalogUrl: options.catalogUrl,
+    }),
+    new AssaiStoreUrlCache({
+      cacheRootDirectory: resolve(process.cwd(), options.cacheRootDirectory),
+    }),
+    clock,
+    logger,
+    visualDatasetCaptureService,
+  );
+
+  return new AssaiPlaywrightStrategyAdapter(
+    {
+      extractionInput: {
+        stores: filterAssaiStores(listAssaiMonitoredStores(), options),
+        viewport: options.viewport,
+        timeoutMs: options.timeoutMs,
+        storeTimeoutMs: options.storeTimeoutMs,
+        maxStoreAttempts: options.maxStoreAttempts,
+        settleDelayMs: options.settleDelayMs,
+      },
+      outputRootDirectory: resolve(process.cwd(), options.outputRootDirectory),
+      visualDatasetRootDirectory,
+      visualDatasetSplit: options.visualDatasetSplit,
+    },
+    {
+      extractionService,
+      storage: new LocalSharedImageGalleryStorage(new FetchLeafletImageHttpClient()),
       countVisualDatasetSamples,
     },
   );

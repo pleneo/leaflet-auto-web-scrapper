@@ -61,6 +61,20 @@ describe('LocalSharedImageGalleryStorage', () => {
     );
   });
 
+  it('stores metadata for an extraction with no successful units', async () => {
+    const storage = new LocalSharedImageGalleryStorage(new FakeImageHttpClient());
+
+    const stored = await storage.store({
+      rootDirectory,
+      supermarketId: 'assai',
+      extractedAtIso: '2026-08-05T10:00:00.000Z',
+      units: [],
+    });
+
+    expect(stored.directoryPath).toBe(join(rootDirectory, 'assai/2026-08-05/10-00'));
+    expect(await readFile(stored.metadataPath, 'utf8')).toContain('"units": []');
+  });
+
   it('rejects invalid input', async () => {
     const storage = new LocalSharedImageGalleryStorage(new FakeImageHttpClient());
 
