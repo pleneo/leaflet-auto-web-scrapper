@@ -27,6 +27,11 @@ export interface MixMateusApiExtractionResult {
   readonly failedStores: readonly MixMateusFailedStore[];
 }
 
+interface DirectLeafletQueryResult {
+  readonly failed: boolean;
+  readonly leaflets: readonly MixMateusApiLeaflet[];
+}
+
 export class MixMateusApiExtractionError extends Error {
   constructor(message: string) {
     super(message);
@@ -102,17 +107,28 @@ export class MixMateusApiExtractionService {
     store: MixMateusMonitoredStore,
   ): Promise<readonly ExtractedMixMateusPdfLeaflet[]> {
     const directQuery = createDirectLeafletQuery(store);
-    const directLeaflets = await this.tryListLeaflets(directQuery);
+    const directResult = await this.tryListLeaflets(directQuery);
 
-    if (directLeaflets.length > 0) {
+    if (directResult.leaflets.length > 0) {
       this.logger.info('Fetched Mix Mateus API leaflets through direct store query.', {
         storeSlug: store.storeSlug,
-        leaflets: directLeaflets.length,
+        leaflets: directResult.leaflets.length,
       });
-      return directLeaflets.map((leaflet, index) => this.createExtractedLeaflet(leaflet, index));
+      return directResult.leaflets.map((leaflet, index) =>
+        this.createExtractedLeaflet(leaflet, index),
+      );
     }
 
-    const resolvedQuery = await this.resolveLeafletQueryFromCatalog(store, directQuery);
+    const resolvedQuery = await this.resolveLeafletQueryFromCatalog(
+      store,
+      directQuery,
+      directResult,
+    );
+
+    if (resolvedQuery === null) {
+      return [];
+    }
+
     const resolvedLeaflets = await this.leafletProvider.listLeaflets(resolvedQuery);
 
     this.logger.info('Fetched Mix Mateus API leaflets through resolved store query.', {
@@ -126,9 +142,12 @@ export class MixMateusApiExtractionService {
 
   private async tryListLeaflets(
     query: MixMateusLeafletQuery,
-  ): Promise<readonly MixMateusApiLeaflet[]> {
+  ): Promise<DirectLeafletQueryResult> {
     try {
-      return await this.leafletProvider.listLeaflets(query);
+      return {
+        failed: false,
+        leaflets: await this.leafletProvider.listLeaflets(query),
+      };
     } catch (error) {
       this.logger.warn('Mix Mateus direct API leaflet query failed; resolving store catalog.', {
         stateCode: query.stateCode,
@@ -138,18 +157,32 @@ export class MixMateusApiExtractionService {
           error instanceof Error ? error.message : 'Unexpected Mix Mateus direct query failure.',
       });
 
-      return [];
+      return {
+        failed: true,
+        leaflets: [],
+      };
     }
   }
 
   private async resolveLeafletQueryFromCatalog(
     store: MixMateusMonitoredStore,
     directQuery: MixMateusLeafletQuery,
-  ): Promise<MixMateusLeafletQuery> {
+    directResult: DirectLeafletQueryResult,
+  ): Promise<MixMateusLeafletQuery | null> {
     const cities = await this.cityCatalogProvider.listCities(store.stateCode);
     const city = findMatchingCity(cities, store, directQuery.citySlug);
 
     if (city === null) {
+      if (!directResult.failed) {
+        this.logger.info('Mix Mateus API returned no leaflets and no city catalog match.', {
+          storeSlug: store.storeSlug,
+          storeName: store.storeName,
+          cityName: store.cityName,
+        });
+
+        return null;
+      }
+
       throw new MixMateusApiExtractionError(`Could not resolve Mix Mateus city ${store.cityName}.`);
     }
 
