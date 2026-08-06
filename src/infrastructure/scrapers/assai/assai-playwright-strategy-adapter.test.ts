@@ -137,6 +137,26 @@ describe('AssaiPlaywrightStrategyAdapter', () => {
     expect(output.units[0]?.status).toBe('empty');
     expect(output.units[0]?.leaflets).toEqual([]);
   });
+
+  it('reports zero artifacts when a stored leaflet has no shared gallery match', async () => {
+    const storedExtraction = createStoredExtraction();
+
+    const adapter = createAdapter({
+      extractionService: new FakeExtractionService({
+        ...createExtractionResult(),
+        failedStores: [],
+      }),
+      storage: new FakeStorage({
+        ...storedExtraction,
+        sharedLeaflets: [],
+      }),
+      countVisualDatasetSamples: () => Promise.resolve(0),
+    });
+
+    const output = await adapter.execute(createInput('disabled'));
+
+    expect(output.units[0]?.leaflets[0]?.artifactCount).toBe(0);
+  });
 });
 
 function createAdapter(input: {
