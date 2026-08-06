@@ -140,9 +140,7 @@ export class MixMateusApiExtractionService {
     return resolvedLeaflets.map((leaflet, index) => this.createExtractedLeaflet(leaflet, index));
   }
 
-  private async tryListLeaflets(
-    query: MixMateusLeafletQuery,
-  ): Promise<DirectLeafletQueryResult> {
+  private async tryListLeaflets(query: MixMateusLeafletQuery): Promise<DirectLeafletQueryResult> {
     try {
       return {
         failed: false,

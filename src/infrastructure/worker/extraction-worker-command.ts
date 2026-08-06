@@ -91,10 +91,7 @@ async function run(): Promise<void> {
   const workerOptions = parseExtractionWorkerCommandOptions(process.argv.slice(2), process.env);
   const scraperArgs = filterExtractionWorkerCommandArguments(process.argv.slice(2));
   const carnaubaOptions = parseCarnaubaPlaywrightCommandOptions(scraperArgs, process.env);
-  const superDoPovoOptions = parseSuperDoPovoPlaywrightCommandOptions(
-    scraperArgs,
-    process.env,
-  );
+  const superDoPovoOptions = parseSuperDoPovoPlaywrightCommandOptions(scraperArgs, process.env);
   const mixMateusOptions = parseMixMateusPlaywrightCommandOptions(scraperArgs, process.env);
   const atacadaoOptions = parseAtacadaoPlaywrightCommandOptions(scraperArgs, process.env);
   const assaiOptions = parseAssaiPlaywrightCommandOptions(scraperArgs, process.env);
