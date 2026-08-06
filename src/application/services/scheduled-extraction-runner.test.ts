@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Clock } from '../ports/clock';
-import type { Logger } from '../ports/logger';
 import type {
-  PlaywrightExtractionInput,
-  PlaywrightExtractionOutput,
-  PlaywrightExtractionStrategy,
-} from '../ports/playwright-extraction-strategy';
+  ExtractionStrategy,
+  ExtractionStrategyInput,
+  ExtractionStrategyOutput,
+} from '../ports/extraction-strategy';
+import type { Logger } from '../ports/logger';
+import { ExtractionStrategyRegistry } from './extraction-strategy-registry';
 import type { ExtractionStateChangeSummary } from './extraction-state-service';
 import { InMemoryExtractionLock } from './extraction-lock';
 import { ExtractionTargetRegistry } from './extraction-target-registry';
-import { PlaywrightStrategyRegistry } from './playwright-strategy-registry';
 import {
   InvalidScheduledExtractionRunnerConfigError,
   ScheduledExtractionRunner,
@@ -36,8 +36,8 @@ const assaiTarget = {
 } as const;
 
 describe('ScheduledExtractionRunner', () => {
-  it('runs enabled targets through their registered Playwright strategies', async () => {
-    const strategy = new FakePlaywrightStrategy();
+  it('runs enabled targets through their registered extraction strategies', async () => {
+    const strategy = new FakeExtractionStrategy();
     const runner = createRunner({
       strategy,
       targets: [carnaubaTarget, assaiTarget],
@@ -58,7 +58,7 @@ describe('ScheduledExtractionRunner', () => {
   });
 
   it('filters enabled targets by explicit target ids', async () => {
-    const strategy = new FakePlaywrightStrategy();
+    const strategy = new FakeExtractionStrategy();
     const runner = createRunner({
       onlyTargetIds: ['assai'],
       strategy,
@@ -76,7 +76,7 @@ describe('ScheduledExtractionRunner', () => {
     lock.acquire('carnauba');
     const runner = createRunner({
       lock,
-      strategy: new FakePlaywrightStrategy(),
+      strategy: new FakeExtractionStrategy(),
       targets: [carnaubaTarget],
     });
 
@@ -92,7 +92,7 @@ describe('ScheduledExtractionRunner', () => {
   });
 
   it('retries a target after a transient failure', async () => {
-    const strategy = new FakePlaywrightStrategy({
+    const strategy = new FakeExtractionStrategy({
       failuresBeforeSuccess: 1,
     });
     const delay = vi.fn(() => Promise.resolve());
@@ -113,7 +113,7 @@ describe('ScheduledExtractionRunner', () => {
 
   it('reports failed targets after retry exhaustion', async () => {
     const runner = createRunner({
-      strategy: new FakePlaywrightStrategy({
+      strategy: new FakeExtractionStrategy({
         failuresBeforeSuccess: 3,
       }),
       targets: [carnaubaTarget],
@@ -132,7 +132,7 @@ describe('ScheduledExtractionRunner', () => {
     const logger = new FakeLogger();
     const runner = createRunner({
       logger,
-      strategy: new FakePlaywrightStrategy({
+      strategy: new FakeExtractionStrategy({
         output: {
           leafletsFound: 2,
           artifactsDownloaded: 0,
@@ -158,7 +158,7 @@ describe('ScheduledExtractionRunner', () => {
 
   it('records target state after successful extraction output', async () => {
     const stateService = new FakeExtractionStateService();
-    const strategy = new FakePlaywrightStrategy();
+    const strategy = new FakeExtractionStrategy();
     const runner = createRunner({
       stateService,
       strategy,
@@ -177,7 +177,7 @@ describe('ScheduledExtractionRunner', () => {
     const lock = new InMemoryExtractionLock();
     const runner = createRunner({
       lock,
-      strategy: new FakePlaywrightStrategy({
+      strategy: new FakeExtractionStrategy({
         failuresBeforeSuccess: 3,
       }),
       targets: [carnaubaTarget],
@@ -197,7 +197,7 @@ describe('ScheduledExtractionRunner', () => {
           visualDatasetCapturePolicy: 'always',
           onlyTargetIds: [],
         },
-        strategy: new FakePlaywrightStrategy(),
+        strategy: new FakeExtractionStrategy(),
         targets: [carnaubaTarget],
       }),
     ).toThrow(InvalidScheduledExtractionRunnerConfigError);
@@ -210,7 +210,7 @@ describe('ScheduledExtractionRunner', () => {
           visualDatasetCapturePolicy: 'always',
           onlyTargetIds: [],
         },
-        strategy: new FakePlaywrightStrategy(),
+        strategy: new FakeExtractionStrategy(),
         targets: [carnaubaTarget],
       }),
     ).toThrow(InvalidScheduledExtractionRunnerConfigError);
@@ -229,7 +229,7 @@ interface CreateRunnerInput {
   readonly lock?: InMemoryExtractionLock;
   readonly onlyTargetIds?: readonly string[];
   readonly stateService?: FakeExtractionStateService;
-  readonly strategy: PlaywrightExtractionStrategy;
+  readonly strategy: ExtractionStrategy;
   readonly targets: readonly [
     typeof carnaubaTarget,
     ...(typeof carnaubaTarget | typeof assaiTarget)[],
@@ -246,7 +246,7 @@ function createRunner(input: CreateRunnerInput): ScheduledExtractionRunner {
     },
     {
       targetRegistry: new ExtractionTargetRegistry(input.targets),
-      strategyRegistry: new PlaywrightStrategyRegistry([input.strategy]),
+      strategyRegistry: new ExtractionStrategyRegistry([input.strategy]),
       lock: input.lock ?? new InMemoryExtractionLock(),
       stateService: input.stateService ?? new FakeExtractionStateService(),
       clock: new IncrementingClock(),
@@ -256,10 +256,12 @@ function createRunner(input: CreateRunnerInput): ScheduledExtractionRunner {
   );
 }
 
-class FakePlaywrightStrategy implements PlaywrightExtractionStrategy {
+class FakeExtractionStrategy implements ExtractionStrategy {
   readonly supermarketId = 'carnauba';
 
-  readonly inputs: PlaywrightExtractionInput[] = [];
+  readonly mode = 'playwright';
+
+  readonly inputs: ExtractionStrategyInput[] = [];
 
   private remainingFailures: number;
 
@@ -287,7 +289,7 @@ class FakePlaywrightStrategy implements PlaywrightExtractionStrategy {
     this.remainingFailures = config.failuresBeforeSuccess ?? 0;
   }
 
-  execute(input: PlaywrightExtractionInput): Promise<PlaywrightExtractionOutput> {
+  execute(input: ExtractionStrategyInput): Promise<ExtractionStrategyOutput> {
     this.inputs.push(input);
 
     if (this.remainingFailures > 0) {
@@ -328,12 +330,12 @@ class FakePlaywrightStrategy implements PlaywrightExtractionStrategy {
 }
 
 class FakeExtractionStateService {
-  readonly outputs: PlaywrightExtractionOutput[] = [];
+  readonly outputs: ExtractionStrategyOutput[] = [];
 
   readonly observedAtIsoValues: string[] = [];
 
   recordOutput(
-    output: PlaywrightExtractionOutput,
+    output: ExtractionStrategyOutput,
     observedAtIso: string,
   ): Promise<ExtractionStateChangeSummary> {
     this.outputs.push(output);

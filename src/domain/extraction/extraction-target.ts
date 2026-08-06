@@ -1,6 +1,6 @@
 import type { SupermarketId } from '../supermarket/supermarket-id';
 
-export type ExtractionMode = 'playwright';
+export type ExtractionMode = 'api' | 'hybrid' | 'playwright';
 
 export interface ExtractionTarget {
   readonly targetId: string;

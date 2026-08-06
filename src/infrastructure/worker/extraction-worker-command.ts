@@ -1,12 +1,21 @@
 import { readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { Logger } from '../../application/ports/logger';
+import type { ExtractionStrategy } from '../../application/ports/extraction-strategy';
 import { InMemoryExtractionLock } from '../../application/services/extraction-lock';
+import {
+  createPlaywrightExtractionStrategy,
+  ExtractionStrategyRegistry,
+} from '../../application/services/extraction-strategy-registry';
 import { ExtractionStateService } from '../../application/services/extraction-state-service';
 import { ExtractionTargetRegistry } from '../../application/services/extraction-target-registry';
-import { PlaywrightStrategyRegistry } from '../../application/services/playwright-strategy-registry';
+import { HybridExtractionStrategy } from '../../application/services/hybrid-extraction-strategy';
 import { ScheduledExtractionRunner } from '../../application/services/scheduled-extraction-runner';
-import { createExtractionTarget } from '../../domain/extraction/extraction-target';
+import {
+  createExtractionTarget,
+  type ExtractionMode,
+} from '../../domain/extraction/extraction-target';
+import type { SupermarketId } from '../../domain/supermarket/supermarket-id';
 import { VisualDatasetCaptureService } from '../../application/services/visual-dataset-capture-service';
 import { ConsoleLogger } from '../logging/console-logger';
 import { JsonLogger } from '../logging/json-logger';
@@ -22,6 +31,8 @@ import { AtacadaoLeafletExtractor } from '../scrapers/atacadao/atacadao-leaflet-
 import { AtacadaoPlaywrightStrategyAdapter } from '../scrapers/atacadao/atacadao-playwright-strategy-adapter';
 import { listAtacadaoMonitoredStores } from '../scrapers/atacadao/atacadao-targets';
 import { PlaywrightAtacadaoLeafletPageFactory } from '../scrapers/atacadao/playwright-atacadao-leaflet-page.factory';
+import { CarnaubaApiExtractionService } from '../scrapers/carnauba/carnauba-api-extraction';
+import { CarnaubaApiStrategyAdapter } from '../scrapers/carnauba/carnauba-api-strategy-adapter';
 import { CarnaubaLeafletExtractor } from '../scrapers/carnauba/carnauba-leaflet-extractor';
 import { CarnaubaPlaywrightExtractionService } from '../scrapers/carnauba/carnauba-playwright-extraction';
 import { CarnaubaPlaywrightStrategyAdapter } from '../scrapers/carnauba/carnauba-playwright-strategy-adapter';
@@ -35,6 +46,8 @@ import { listMixMateusMonitoredStores } from '../scrapers/mixmateus/mixmateus-ta
 import { PlaywrightMixMateusLeafletPageFactory } from '../scrapers/mixmateus/playwright-mixmateus-leaflet-page.factory';
 import { PlaywrightSuperDoPovoApiClient } from '../scrapers/superdopovo/playwright-superdopovo-api-client';
 import { PlaywrightSuperDoPovoLeafletPageFactory } from '../scrapers/superdopovo/playwright-superdopovo-leaflet-page.factory';
+import { SuperDoPovoApiExtractionService } from '../scrapers/superdopovo/superdopovo-api-extraction';
+import { SuperDoPovoApiStrategyAdapter } from '../scrapers/superdopovo/superdopovo-api-strategy-adapter';
 import { SuperDoPovoLeafletExtractor } from '../scrapers/superdopovo/superdopovo-leaflet-extractor';
 import { SuperDoPovoPlaywrightExtractionService } from '../scrapers/superdopovo/superdopovo-playwright-extraction';
 import { SuperDoPovoPlaywrightStrategyAdapter } from '../scrapers/superdopovo/superdopovo-playwright-strategy-adapter';
@@ -87,6 +100,37 @@ async function run(): Promise<void> {
     process.cwd(),
     carnaubaOptions.visualDatasetRootDirectory,
   );
+  const carnaubaPlaywrightStrategy = createPlaywrightExtractionStrategy(
+    createCarnaubaStrategy(carnaubaOptions, visualDatasetRootDirectory, clock, logger),
+  );
+  const superDoPovoPlaywrightStrategy = createPlaywrightExtractionStrategy(
+    createSuperDoPovoStrategy(superDoPovoOptions, visualDatasetRootDirectory, clock, logger),
+  );
+  const carnaubaApiStrategy = createCarnaubaApiStrategy(carnaubaOptions, clock, logger);
+  const superDoPovoApiStrategy = createSuperDoPovoApiStrategy(superDoPovoOptions, clock, logger);
+  const extractionStrategies: ExtractionStrategy[] = [
+    carnaubaPlaywrightStrategy,
+    carnaubaApiStrategy,
+    new HybridExtractionStrategy('carnauba', {
+      apiStrategy: carnaubaApiStrategy,
+      playwrightStrategy: carnaubaPlaywrightStrategy,
+    }),
+    superDoPovoPlaywrightStrategy,
+    superDoPovoApiStrategy,
+    new HybridExtractionStrategy('superdopovo', {
+      apiStrategy: superDoPovoApiStrategy,
+      playwrightStrategy: superDoPovoPlaywrightStrategy,
+    }),
+    createPlaywrightExtractionStrategy(
+      createMixMateusStrategy(mixMateusOptions, visualDatasetRootDirectory, clock, logger),
+    ),
+    createPlaywrightExtractionStrategy(
+      createAtacadaoStrategy(atacadaoOptions, visualDatasetRootDirectory, clock, logger),
+    ),
+    createPlaywrightExtractionStrategy(
+      createAssaiStrategy(assaiOptions, visualDatasetRootDirectory, clock, logger),
+    ),
+  ];
   const runner = new ScheduledExtractionRunner(
     {
       workerId: 'generic-playwright-worker',
@@ -100,7 +144,7 @@ async function run(): Promise<void> {
           targetId: 'carnauba',
           supermarketId: 'carnauba',
           supermarketName: 'Carnauba Supermercados',
-          mode: 'playwright',
+          mode: resolveWorkerTargetMode(workerOptions.extractionMode, 'carnauba'),
           enabled: true,
           intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
           maxAttempts: 1,
@@ -109,7 +153,7 @@ async function run(): Promise<void> {
           targetId: 'superdopovo',
           supermarketId: 'superdopovo',
           supermarketName: 'Super do Povo',
-          mode: 'playwright',
+          mode: resolveWorkerTargetMode(workerOptions.extractionMode, 'superdopovo'),
           enabled: true,
           intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
           maxAttempts: 1,
@@ -118,7 +162,7 @@ async function run(): Promise<void> {
           targetId: 'mixmateus',
           supermarketId: 'mixmateus',
           supermarketName: 'Mix Mateus',
-          mode: 'playwright',
+          mode: resolveWorkerTargetMode(workerOptions.extractionMode, 'mixmateus'),
           enabled: true,
           intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
           maxAttempts: 1,
@@ -127,7 +171,7 @@ async function run(): Promise<void> {
           targetId: 'atacadao',
           supermarketId: 'atacadao',
           supermarketName: 'Atacadão',
-          mode: 'playwright',
+          mode: resolveWorkerTargetMode(workerOptions.extractionMode, 'atacadao'),
           enabled: true,
           intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
           maxAttempts: 1,
@@ -136,19 +180,13 @@ async function run(): Promise<void> {
           targetId: 'assai',
           supermarketId: 'assai',
           supermarketName: 'Assaí Atacadista',
-          mode: 'playwright',
+          mode: resolveWorkerTargetMode(workerOptions.extractionMode, 'assai'),
           enabled: true,
           intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
           maxAttempts: 1,
         }),
       ]),
-      strategyRegistry: new PlaywrightStrategyRegistry([
-        createCarnaubaStrategy(carnaubaOptions, visualDatasetRootDirectory, clock, logger),
-        createSuperDoPovoStrategy(superDoPovoOptions, visualDatasetRootDirectory, clock, logger),
-        createMixMateusStrategy(mixMateusOptions, visualDatasetRootDirectory, clock, logger),
-        createAtacadaoStrategy(atacadaoOptions, visualDatasetRootDirectory, clock, logger),
-        createAssaiStrategy(assaiOptions, visualDatasetRootDirectory, clock, logger),
-      ]),
+      strategyRegistry: new ExtractionStrategyRegistry(extractionStrategies),
       lock: new InMemoryExtractionLock(),
       stateService: new ExtractionStateService(
         new FileSystemExtractionStateRepository({
@@ -163,6 +201,11 @@ async function run(): Promise<void> {
   const shutdown = createShutdownState(logger, workerOptions.shutdownTimeoutMs);
 
   registerShutdownHandlers(shutdown);
+
+  if (workerOptions.runOnce) {
+    await runCycle(runner, shutdown);
+    return;
+  }
 
   if (workerOptions.runImmediately) {
     await runCycle(runner, shutdown);
@@ -241,6 +284,46 @@ function createCarnaubaStrategy(
   );
 }
 
+function createCarnaubaApiStrategy(
+  carnaubaOptions: ReturnType<typeof parseCarnaubaPlaywrightCommandOptions>,
+  clock: SystemClock,
+  logger: Logger,
+): CarnaubaApiStrategyAdapter {
+  const authTokenProvider = new PlaywrightMercadappAuthTokenProvider({
+    bootstrapUrl: `${carnaubaOptions.siteBaseUrl.replace(/\/+$/, '')}/loja/79/encartes`,
+    timeoutMs: carnaubaOptions.timeoutMs,
+  });
+  const apiClient = new MercadappCarnaubaApiClient({
+    baseUrl: carnaubaOptions.apiBaseUrl,
+    brandId: carnaubaOptions.brandId,
+    authTokenProvider,
+  });
+  const extractionService = new CarnaubaApiExtractionService(
+    apiClient,
+    apiClient,
+    new StoreSnapshotCache({
+      cacheRootDirectory: resolve(process.cwd(), carnaubaOptions.cacheRootDirectory),
+    }),
+    clock,
+    logger,
+  );
+
+  return new CarnaubaApiStrategyAdapter(
+    {
+      extractionInput: {
+        brandId: carnaubaOptions.brandId,
+        storeCacheTtlMs: carnaubaOptions.cacheTtlMs,
+      },
+      outputRootDirectory: resolve(process.cwd(), carnaubaOptions.outputRootDirectory),
+      siteBaseUrl: carnaubaOptions.siteBaseUrl,
+    },
+    {
+      extractionService,
+      storage: new LocalSharedImageGalleryStorage(new FetchLeafletImageHttpClient()),
+    },
+  );
+}
+
 function createSuperDoPovoStrategy(
   options: ReturnType<typeof parseSuperDoPovoPlaywrightCommandOptions>,
   visualDatasetRootDirectory: string,
@@ -293,6 +376,37 @@ function createSuperDoPovoStrategy(
       extractionService,
       storage: new LocalSharedImageGalleryStorage(new FetchLeafletImageHttpClient()),
       countVisualDatasetSamples,
+    },
+  );
+}
+
+function createSuperDoPovoApiStrategy(
+  options: ReturnType<typeof parseSuperDoPovoPlaywrightCommandOptions>,
+  clock: SystemClock,
+  logger: Logger,
+): SuperDoPovoApiStrategyAdapter {
+  const apiClient = new PlaywrightSuperDoPovoApiClient({
+    bootstrapUrl: `${options.siteBaseUrl.replace(/\/+$/, '')}/booklets`,
+    apiBaseUrl: options.apiBaseUrl,
+    timeoutMs: options.timeoutMs,
+  });
+  const extractionService = new SuperDoPovoApiExtractionService(
+    apiClient,
+    apiClient,
+    clock,
+    logger,
+  );
+
+  return new SuperDoPovoApiStrategyAdapter(
+    {
+      extractionInput: {
+        siteBaseUrl: options.siteBaseUrl,
+      },
+      outputRootDirectory: resolve(process.cwd(), options.outputRootDirectory),
+    },
+    {
+      extractionService,
+      storage: new LocalSharedImageGalleryStorage(new FetchLeafletImageHttpClient()),
     },
   );
 }
@@ -484,6 +598,21 @@ function createLogger(env: Readonly<Record<string, string | undefined>>): Logger
   }
 
   return new ConsoleLogger('info');
+}
+
+function resolveWorkerTargetMode(
+  requestedMode: ExtractionMode,
+  supermarketId: SupermarketId,
+): ExtractionMode {
+  if (requestedMode === 'playwright' || supportsApiExtraction(supermarketId)) {
+    return requestedMode;
+  }
+
+  return 'playwright';
+}
+
+function supportsApiExtraction(supermarketId: SupermarketId): boolean {
+  return supermarketId === 'carnauba' || supermarketId === 'superdopovo';
 }
 
 function delay(durationMs: number): Promise<void> {

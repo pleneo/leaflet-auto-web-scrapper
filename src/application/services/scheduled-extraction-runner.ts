@@ -1,12 +1,12 @@
 import type { VisualDatasetCapturePolicy } from '../../domain/dataset/visual-dataset-capture-policy';
 import type { ExtractionTarget } from '../../domain/extraction/extraction-target';
 import type { Clock } from '../ports/clock';
+import type { ExtractionStrategyOutput } from '../ports/extraction-strategy';
 import type { Logger } from '../ports/logger';
-import type { PlaywrightExtractionOutput } from '../ports/playwright-extraction-strategy';
 import type { ExtractionLock } from './extraction-lock';
+import type { ExtractionStrategyRegistry } from './extraction-strategy-registry';
 import type { ExtractionStateChangeSummary } from './extraction-state-service';
 import type { ExtractionTargetRegistry } from './extraction-target-registry';
-import type { PlaywrightStrategyRegistry } from './playwright-strategy-registry';
 
 export interface ScheduledExtractionRunnerConfig {
   readonly workerId: string;
@@ -17,7 +17,7 @@ export interface ScheduledExtractionRunnerConfig {
 
 export interface ScheduledExtractionRunnerDependencies {
   readonly targetRegistry: ExtractionTargetRegistry;
-  readonly strategyRegistry: PlaywrightStrategyRegistry;
+  readonly strategyRegistry: ExtractionStrategyRegistry;
   readonly lock: ExtractionLock;
   readonly stateService: ScheduledExtractionStateService;
   readonly clock: Clock;
@@ -27,7 +27,7 @@ export interface ScheduledExtractionRunnerDependencies {
 
 export interface ScheduledExtractionStateService {
   recordOutput(
-    output: PlaywrightExtractionOutput,
+    output: ExtractionStrategyOutput,
     observedAtIso: string,
   ): Promise<ExtractionStateChangeSummary>;
 }
@@ -37,7 +37,7 @@ export type ScheduledTargetRunResult =
       readonly status: 'succeeded';
       readonly target: ExtractionTarget;
       readonly attempts: number;
-      readonly output: PlaywrightExtractionOutput;
+      readonly output: ExtractionStrategyOutput;
       readonly stateChangeSummary: ExtractionStateChangeSummary;
     }
   | {
@@ -71,7 +71,7 @@ export class ScheduledExtractionRunner {
 
   private readonly targetRegistry: ExtractionTargetRegistry;
 
-  private readonly strategyRegistry: PlaywrightStrategyRegistry;
+  private readonly strategyRegistry: ExtractionStrategyRegistry;
 
   private readonly lock: ExtractionLock;
 
@@ -159,7 +159,7 @@ export class ScheduledExtractionRunner {
     let lastErrorMessage = 'Unknown extraction target failure.';
 
     for (let attempt = 1; attempt <= target.maxAttempts; attempt += 1) {
-      const runId = createRunId(target.targetId, this.clock.nowIso(), attempt);
+      const runId = createRunId(target, this.clock.nowIso(), attempt);
 
       try {
         this.logger.info('Extraction target attempt started.', {
@@ -168,7 +168,7 @@ export class ScheduledExtractionRunner {
           runId,
         });
 
-        const output = await this.strategyRegistry.get(target.supermarketId).execute({
+        const output = await this.strategyRegistry.get(target).execute({
           runId,
           target,
           startedAtIso: this.clock.nowIso(),
@@ -266,6 +266,8 @@ function validateConfig(config: ScheduledExtractionRunnerConfig): void {
   }
 }
 
-function createRunId(targetId: string, startedAtIso: string, attempt: number): string {
-  return `${targetId}-playwright-${startedAtIso.replace(/[:.]/g, '-')}-attempt-${String(attempt)}`;
+function createRunId(target: ExtractionTarget, startedAtIso: string, attempt: number): string {
+  return `${target.targetId}-${target.mode}-${startedAtIso.replace(/[:.]/g, '-')}-attempt-${String(
+    attempt,
+  )}`;
 }
