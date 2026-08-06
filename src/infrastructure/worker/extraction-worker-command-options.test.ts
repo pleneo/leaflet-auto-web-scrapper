@@ -10,6 +10,7 @@ describe('parseExtractionWorkerCommandOptions', () => {
       extractionMode: 'playwright',
       intervalMs: 3_600_000,
       runImmediately: true,
+      runOnce: false,
       retryBaseDelayMs: 30_000,
       shutdownTimeoutMs: 30_000,
       stateRootDirectory: '.data/state',
@@ -23,6 +24,7 @@ describe('parseExtractionWorkerCommandOptions', () => {
       parseExtractionWorkerCommandOptions([], {
         WORKER_INTERVAL_MINUTES: '30',
         WORKER_RUN_IMMEDIATELY: 'false',
+        WORKER_RUN_ONCE: 'true',
         WORKER_RETRY_BASE_DELAY_MS: '500',
         WORKER_SHUTDOWN_TIMEOUT_MS: '1000',
         EXTRACTION_STATE_DIR: '.data/custom-state',
@@ -34,6 +36,7 @@ describe('parseExtractionWorkerCommandOptions', () => {
       intervalMs: 1_800_000,
       extractionMode: 'hybrid',
       runImmediately: false,
+      runOnce: true,
       retryBaseDelayMs: 500,
       shutdownTimeoutMs: 1_000,
       stateRootDirectory: '.data/custom-state',
@@ -54,6 +57,7 @@ describe('parseExtractionWorkerCommandOptions', () => {
           'carnauba',
           '--extraction-mode',
           'api',
+          '--run-once',
         ],
         {
           WORKER_INTERVAL_MINUTES: '30',
@@ -65,6 +69,7 @@ describe('parseExtractionWorkerCommandOptions', () => {
     ).toMatchObject({
       intervalMs: 300_000,
       extractionMode: 'api',
+      runOnce: true,
       stateRootDirectory: '.data/arg-state',
       onlyTargetIds: ['carnauba'],
     });

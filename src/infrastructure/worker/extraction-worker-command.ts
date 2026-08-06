@@ -202,6 +202,11 @@ async function run(): Promise<void> {
 
   registerShutdownHandlers(shutdown);
 
+  if (workerOptions.runOnce) {
+    await runCycle(runner, shutdown);
+    return;
+  }
+
   if (workerOptions.runImmediately) {
     await runCycle(runner, shutdown);
   }

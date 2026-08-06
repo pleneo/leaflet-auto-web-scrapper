@@ -8,6 +8,7 @@ export interface ExtractionWorkerCommandOptions {
   readonly extractionMode: ExtractionMode;
   readonly intervalMs: number;
   readonly runImmediately: boolean;
+  readonly runOnce: boolean;
   readonly retryBaseDelayMs: number;
   readonly shutdownTimeoutMs: number;
   readonly stateRootDirectory: string;
@@ -37,6 +38,7 @@ export function parseExtractionWorkerCommandOptions(
       60 *
       1_000,
     runImmediately: readBoolean(values, env, 'run-immediately', 'WORKER_RUN_IMMEDIATELY', true),
+    runOnce: readBoolean(values, env, 'run-once', 'WORKER_RUN_ONCE', false),
     retryBaseDelayMs: readNonNegativeInteger(
       values,
       env,
@@ -86,8 +88,9 @@ function parseExtractionMode(value: string): ExtractionMode {
 
 function parseNamedArguments(args: readonly string[]): ReadonlyMap<string, string> {
   const values = new Map<string, string>();
+  const booleanFlags = new Set(['run-once']);
 
-  for (let index = 0; index < args.length; index += 2) {
+  for (let index = 0; index < args.length; index += 1) {
     const key = args[index];
     const value = args[index + 1];
 
@@ -97,11 +100,17 @@ function parseNamedArguments(args: readonly string[]): ReadonlyMap<string, strin
       );
     }
 
+    if ((value === undefined || value.startsWith('--')) && booleanFlags.has(key.slice(2))) {
+      values.set(key.slice(2), 'true');
+      continue;
+    }
+
     if (value === undefined || value.startsWith('--')) {
       throw new InvalidExtractionWorkerCommandOptionsError(`Argument ${key} must have a value.`);
     }
 
     values.set(key.slice(2), value);
+    index += 1;
   }
 
   return values;
