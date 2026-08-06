@@ -37,6 +37,11 @@ describe('AssaiStoreUrlCache', () => {
       resolvedOfferUrl: 'https://www.assai.com.br/ofertas/ceara/assai-parangaba-novo',
       resolvedAtIso: '2026-08-05T11:00:00.000Z',
     });
+    await cache.set({
+      storeSlug: 'assai-cais-do-porto',
+      resolvedOfferUrl: 'https://www.assai.com.br/ofertas/ceara/assai-cais-do-porto',
+      resolvedAtIso: '2026-08-05T12:00:00.000Z',
+    });
 
     expect(path).toBe(join(cacheRootDirectory, 'assai/store-url-cache.json'));
     await expect(cache.get('assai-parangaba')).resolves.toBe(
@@ -45,6 +50,11 @@ describe('AssaiStoreUrlCache', () => {
     await expect(cache.load()).resolves.toEqual({
       version: 1,
       entries: [
+        {
+          storeSlug: 'assai-cais-do-porto',
+          resolvedOfferUrl: 'https://www.assai.com.br/ofertas/ceara/assai-cais-do-porto',
+          resolvedAtIso: '2026-08-05T12:00:00.000Z',
+        },
         {
           storeSlug: 'assai-parangaba',
           resolvedOfferUrl: 'https://www.assai.com.br/ofertas/ceara/assai-parangaba-novo',
@@ -71,10 +81,42 @@ describe('AssaiStoreUrlCache', () => {
         resolvedAtIso: '2026-08-05T10:00:00.000Z',
       }),
     ).rejects.toThrow(AssaiStoreUrlCacheError);
+    await expect(
+      cache.set({
+        storeSlug: 'assai-parangaba',
+        resolvedOfferUrl: 'https://www.assai.com.br/ofertas/ceara/assai-parangaba',
+        resolvedAtIso: 'invalid-date',
+      }),
+    ).rejects.toThrow(AssaiStoreUrlCacheError);
 
     await mkdir(join(cacheRootDirectory, 'assai'), { recursive: true });
     await writeFile(join(cacheRootDirectory, 'assai/store-url-cache.json'), '[]');
 
     await expect(cache.load()).rejects.toThrow(AssaiStoreUrlCacheError);
+  });
+
+  it('rejects cache files with invalid snapshot fields', async () => {
+    const cache = new AssaiStoreUrlCache({ cacheRootDirectory });
+
+    await mkdir(join(cacheRootDirectory, 'assai'), { recursive: true });
+    await writeFile(
+      join(cacheRootDirectory, 'assai/store-url-cache.json'),
+      `${JSON.stringify({ version: 2, entries: [] })}\n`,
+    );
+
+    await expect(cache.load()).rejects.toThrow(AssaiStoreUrlCacheError);
+
+    await writeFile(
+      join(cacheRootDirectory, 'assai/store-url-cache.json'),
+      `${JSON.stringify({ version: 1, entries: {} })}\n`,
+    );
+
+    await expect(cache.load()).rejects.toThrow(AssaiStoreUrlCacheError);
+  });
+
+  it('rejects a blank cache root directory', async () => {
+    const cache = new AssaiStoreUrlCache({ cacheRootDirectory: ' ' });
+
+    await expect(cache.get('assai-parangaba')).rejects.toThrow(AssaiStoreUrlCacheError);
   });
 });
