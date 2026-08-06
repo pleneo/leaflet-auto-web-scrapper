@@ -73,6 +73,44 @@ export function parseExtractionWorkerCommandOptions(
   };
 }
 
+export function filterExtractionWorkerCommandArguments(args: readonly string[]): readonly string[] {
+  const filteredArgs: string[] = [];
+  const workerOptionNames = new Set([
+    'extraction-mode',
+    'interval-minutes',
+    'run-immediately',
+    'run-once',
+    'retry-base-delay-ms',
+    'shutdown-timeout-ms',
+    'state-root',
+    'only',
+    'visual-dataset-capture-policy',
+  ]);
+
+  let skipNextValue = false;
+
+  for (const [index, key] of args.entries()) {
+    if (skipNextValue) {
+      skipNextValue = false;
+      continue;
+    }
+
+    if (key.startsWith('--') && workerOptionNames.has(key.slice(2))) {
+      const value = args[index + 1];
+
+      if (value !== undefined && !value.startsWith('--')) {
+        skipNextValue = true;
+      }
+
+      continue;
+    }
+
+    filteredArgs.push(key);
+  }
+
+  return filteredArgs;
+}
+
 function parseExtractionMode(value: string): ExtractionMode {
   switch (value) {
     case 'api':

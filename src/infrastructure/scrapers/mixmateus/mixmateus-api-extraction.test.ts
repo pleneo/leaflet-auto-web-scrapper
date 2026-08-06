@@ -198,7 +198,11 @@ describe('MixMateusApiExtractionService', () => {
   });
 
   it('fails a store when the API catalog cannot resolve its city', async () => {
-    const service = createService(new FakeMixMateusApi());
+    const service = createService(
+      new FakeMixMateusApi({
+        failedDirectStoreSlugs: new Set(['mix-henrique-jorge']),
+      }),
+    );
 
     const result = await service.extract({
       stores: [createStore()],
@@ -207,6 +211,26 @@ describe('MixMateusApiExtractionService', () => {
     expect(result.failedStores[0]?.errorMessage).toBe(
       'Could not resolve Mix Mateus city Fortaleza.',
     );
+  });
+
+  it('keeps a store successful when the direct API query returns no leaflets and the city catalog is empty', async () => {
+    const service = createService(new FakeMixMateusApi());
+
+    const result = await service.extract({
+      stores: [
+        createStore({
+          stateCode: 'AL',
+          stateName: 'Alagoas',
+          cityName: 'Maceió',
+          storeSlug: 'mix-mateus-antares',
+          storeName: 'Mix Mateus Antares',
+          finalPageUrl: 'https://ofertasmateus.com/al/maceio/mix-mateus-antares',
+        }),
+      ],
+    });
+
+    expect(result.failedStores).toEqual([]);
+    expect(result.stores[0]?.leaflets).toEqual([]);
   });
 
   it('uses fallback messages for non-error direct query failures', async () => {
