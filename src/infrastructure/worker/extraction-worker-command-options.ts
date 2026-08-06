@@ -87,10 +87,11 @@ export function filterExtractionWorkerCommandArguments(args: readonly string[]):
     'visual-dataset-capture-policy',
   ]);
 
-  for (let index = 0; index < args.length; index += 1) {
-    const key = args[index];
+  let skipNextValue = false;
 
-    if (key === undefined) {
+  for (const [index, key] of args.entries()) {
+    if (skipNextValue) {
+      skipNextValue = false;
       continue;
     }
 
@@ -98,7 +99,7 @@ export function filterExtractionWorkerCommandArguments(args: readonly string[]):
       const value = args[index + 1];
 
       if (value !== undefined && !value.startsWith('--')) {
-        index += 1;
+        skipNextValue = true;
       }
 
       continue;
