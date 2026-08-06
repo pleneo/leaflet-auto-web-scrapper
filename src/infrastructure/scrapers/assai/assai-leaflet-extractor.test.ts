@@ -107,6 +107,96 @@ describe('AssaiLeafletExtractor', () => {
     ]);
   });
 
+  it('keeps the extracted store when resolved URL cache persistence fails with an error', async () => {
+    const page = new FakeAssaiLeafletPage({
+      availableResults: [false, false],
+      currentUrl: 'https://www.assai.com.br/ofertas/ceara/assai-parangaba',
+    });
+    const logger = new RecordingLogger();
+    const extractor = createExtractor({
+      page,
+      cache: new FailingStoreUrlCache(new Error('cache disk unavailable')),
+      logger,
+    });
+
+    const result = await extractor.extract(createInput());
+
+    expect(result.failedStores).toEqual([]);
+    expect(result.stores).toHaveLength(1);
+    expect(logger.warnMessages).toContain('Assai resolved store URL could not be cached.');
+  });
+
+  it('logs an unexpected cache failure when persistence rejects without an error object', async () => {
+    const page = new FakeAssaiLeafletPage({
+      availableResults: [false, false],
+      currentUrl: 'https://www.assai.com.br/ofertas/ceara/assai-parangaba',
+    });
+    const logger = new RecordingLogger();
+    const extractor = createExtractor({
+      page,
+      cache: new FailingStoreUrlCache(null),
+      logger,
+    });
+
+    const result = await extractor.extract(createInput());
+
+    expect(result.failedStores).toEqual([]);
+    expect(logger.warnPayloads).toContainEqual({
+      storeSlug: 'assai-parangaba',
+      errorMessage: 'Unexpected cache persistence failure.',
+    });
+  });
+
+  it('reports unexpected non-error store extraction failures', async () => {
+    const extractor = createExtractor({
+      page: new NonErrorGotoAssaiLeafletPage({
+        availableResults: [true],
+        currentUrl: 'https://www.assai.com.br/ofertas/ceara/assai-parangaba',
+      }),
+    });
+
+    const result = await extractor.extract(createInput());
+
+    expect(result.stores).toEqual([]);
+    expect(result.failedStores[0]?.errorMessage).toBe('Unexpected Assai store extraction failure.');
+  });
+
+  it('uses fallback leaflet values when catalog title and images are empty', async () => {
+    const page = new FakeAssaiLeafletPage({
+      availableResults: [true],
+      currentUrl: 'https://www.assai.com.br/ofertas/ceara/assai-parangaba',
+    });
+    const extractor = createExtractor({
+      page,
+      catalog: {
+        stores: [createCatalogStore()],
+        leaflets: [
+          {
+            leafletId: 'empty-gallery',
+            title: '   ',
+            startDateIso: null,
+            endDateIso: null,
+            lojaIds: [10],
+            tids: [],
+            nids: [],
+            imageUrls: [],
+          },
+        ],
+      },
+    });
+
+    const result = await extractor.extract(createInput());
+
+    expect(result.stores[0]?.leaflets[0]).toEqual({
+      leafletId: 'assai-parangaba-empty-gallery-jornal-de-ofertas',
+      title: 'Jornal de Ofertas',
+      coverImageUrl: 'empty-gallery',
+      imageUrls: [],
+      startDateIso: null,
+      endDateIso: null,
+    });
+  });
+
   it('reports an empty store when the catalog has no assigned leaflets', async () => {
     const page = new FakeAssaiLeafletPage({
       availableResults: [true],
@@ -124,6 +214,65 @@ describe('AssaiLeafletExtractor', () => {
 
     expect(result.stores[0]?.leaflets).toEqual([]);
     expect(result.failedStores).toEqual([]);
+  });
+
+  it('tries an absolute catalog offer URL when the initial page is stale', async () => {
+    const page = new FakeAssaiLeafletPage({
+      availableResults: [false, true],
+      currentUrl: 'https://www.assai.com.br/ofertas/catalogo/assai-parangaba',
+    });
+    const extractor = createExtractor({
+      page,
+      catalog: createCatalog({
+        offerUrlPath: 'https://www.assai.com.br/ofertas/catalogo/assai-parangaba',
+      }),
+    });
+
+    const result = await extractor.extract(createInput());
+
+    expect(result.failedStores).toEqual([]);
+    expect(result.stores[0]?.sourceUrl).toBe(
+      'https://www.assai.com.br/ofertas/catalogo/assai-parangaba',
+    );
+    expect(page.calls).toContain('goto:https://www.assai.com.br/ofertas/catalogo/assai-parangaba');
+  });
+
+  it('normalizes catalog offer paths without a leading slash', async () => {
+    const page = new FakeAssaiLeafletPage({
+      availableResults: [false, true],
+      currentUrl: 'https://www.assai.com.br/ofertas/catalogo/assai-parangaba',
+    });
+    const extractor = createExtractor({
+      page,
+      catalog: createCatalog({
+        offerUrlPath: 'ofertas/catalogo/assai-parangaba',
+      }),
+    });
+
+    const result = await extractor.extract(createInput());
+
+    expect(result.failedStores).toEqual([]);
+    expect(page.calls).toContain('goto:https://www.assai.com.br/ofertas/catalogo/assai-parangaba');
+  });
+
+  it('reports a failed store when an extraction attempt times out', async () => {
+    const extractor = createExtractor({
+      page: new HangingAssaiLeafletPage({
+        availableResults: [true],
+        currentUrl: 'https://www.assai.com.br/ofertas/ceara/assai-parangaba',
+      }),
+    });
+
+    const result = await extractor.extract(
+      createInput({
+        storeTimeoutMs: 1,
+      }),
+    );
+
+    expect(result.stores).toEqual([]);
+    expect(result.failedStores[0]?.errorMessage).toBe(
+      'Assai store assai-parangaba extraction timed out.',
+    );
   });
 
   it('fails a store when it is absent from the catalog', async () => {
@@ -197,6 +346,7 @@ function createExtractor(input: {
   readonly page: AssaiLeafletPage;
   readonly catalog?: AssaiOfferCatalog;
   readonly cache?: AssaiStoreUrlCachePort;
+  readonly logger?: Logger;
   readonly captureService?: RecordingCaptureService;
 }): AssaiLeafletExtractor {
   return new AssaiLeafletExtractor(
@@ -204,7 +354,7 @@ function createExtractor(input: {
     new FakeCatalogProvider(input.catalog ?? createCatalog()),
     input.cache ?? new FakeStoreUrlCache(null),
     new FixedClock(),
-    new NullLogger(),
+    input.logger ?? new NullLogger(),
     input.captureService,
   );
 }
@@ -220,9 +370,11 @@ function createStore(): AssaiMonitoredStore {
   };
 }
 
-function createCatalog(): AssaiOfferCatalog {
+function createCatalog(
+  storeOverrides: Partial<AssaiOfferCatalog['stores'][number]> = {},
+): AssaiOfferCatalog {
   return {
-    stores: [createCatalogStore()],
+    stores: [createCatalogStore(storeOverrides)],
     leaflets: [
       {
         leafletId: '200',
@@ -238,7 +390,9 @@ function createCatalog(): AssaiOfferCatalog {
   };
 }
 
-function createCatalogStore(): AssaiOfferCatalog['stores'][number] {
+function createCatalogStore(
+  overrides: Partial<AssaiOfferCatalog['stores'][number]> = {},
+): AssaiOfferCatalog['stores'][number] {
   return {
     lojaId: 10,
     tid: 20,
@@ -246,6 +400,7 @@ function createCatalogStore(): AssaiOfferCatalog['stores'][number] {
     name: 'Assaí Parangaba',
     offerUrlPath: '/ofertas/ceara/assai-parangaba',
     storeSlug: 'assai-parangaba',
+    ...overrides,
   };
 }
 
@@ -294,6 +449,31 @@ class FakeStoreUrlCache implements AssaiStoreUrlCachePort {
     this.saved.push(input);
 
     return Promise.resolve('/tmp/cache.json');
+  }
+}
+
+class FailingStoreUrlCache implements AssaiStoreUrlCachePort {
+  private readonly failure: Error | null;
+
+  constructor(failure: Error | null) {
+    this.failure = failure;
+  }
+
+  get(storeSlug: string): Promise<string | null> {
+    void storeSlug;
+
+    return Promise.resolve(null);
+  }
+
+  set(input: AssaiCachedStoreUrl): Promise<string> {
+    void input;
+
+    if (this.failure === null) {
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- covers defensive non-Error cache rejection.
+      return Promise.reject();
+    }
+
+    return Promise.reject(this.failure);
   }
 }
 
@@ -431,6 +611,23 @@ class FakeAssaiLeafletPage implements AssaiLeafletPage {
   }
 }
 
+class HangingAssaiLeafletPage extends FakeAssaiLeafletPage {
+  override waitForLeafletsPage(): Promise<void> {
+    return new Promise<void>(() => {
+      return;
+    });
+  }
+}
+
+class NonErrorGotoAssaiLeafletPage extends FakeAssaiLeafletPage {
+  override goto(url: string): Promise<void> {
+    this.calls.push(`goto:${url}`);
+
+    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- covers defensive non-Error adapter rejection.
+    return Promise.reject('non-error failure');
+  }
+}
+
 class RecordingCaptureService {
   readonly inputs: CaptureVisualDatasetSampleInput[] = [];
 
@@ -462,6 +659,20 @@ class NullLogger implements Logger {
 
   error(message: string): void {
     void message;
+  }
+}
+
+class RecordingLogger extends NullLogger {
+  readonly warnMessages: string[] = [];
+
+  readonly warnPayloads: object[] = [];
+
+  override warn(message: string, context?: object): void {
+    this.warnMessages.push(message);
+
+    if (context !== undefined) {
+      this.warnPayloads.push(context);
+    }
   }
 }
 
