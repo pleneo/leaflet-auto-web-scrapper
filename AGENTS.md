@@ -744,6 +744,23 @@ PR titles and descriptions must be written in English and follow the standard do
 
 Before creating or updating a stack, read [docs/gh-stack-workflow.md](docs/gh-stack-workflow.md).
 
+At the end of every stack, the final top branch must pass the complete local quality gate:
+
+```bash
+npm run verify
+```
+
+This is mandatory after all rebases, conflict resolutions, fixup commits, and stack pushes. Running `typecheck`, `lint`, `test:coverage`, `build`, or targeted Prettier checks separately is useful during development, but it is not enough to declare a stack ready. The final readiness signal is always a successful `npm run verify` from the stack's top branch.
+
+If `npm run verify` fails because of unrelated local files, generated artifacts, untracked documentation, or dirty worktree state, the agent must not ignore or bypass the failure. It must either:
+
+- fix or format the relevant files when they belong to the intended change;
+- keep unrelated files unstaged and explain why they block local verification;
+- temporarily move or otherwise isolate unrelated local-only artifacts only when doing so does not delete user work;
+- rerun `npm run verify` successfully before saying the stack is ready.
+
+No PR in the stack should be presented as ready for review or merge while the top branch fails `npm run verify`.
+
 ## 24. Agent Instructions
 
 When an AI coding agent works in this repository, it must follow these rules:
@@ -762,6 +779,7 @@ When an AI coding agent works in this repository, it must follow these rules:
 12. Do not replace the research architecture with a one-off automation script.
 13. Keep 24/7 scheduling, retries, queues, and shutdown behavior outside supermarket strategies.
 14. Use the documented `gh stack` workflow for feature branches and PRs.
+15. After resolving stack conflicts or rebasing branches, run `npm run verify` on the final top branch before reporting completion.
 
 If a user request conflicts with these rules, explain the conflict and propose the smallest alternative that preserves the project's research and production value.
 
@@ -823,9 +841,9 @@ The meaning of each command must remain clear:
 - `npm run format:check`: verifies Prettier formatting, including mandatory semicolons.
 - `npm run test`: runs the automated test suite.
 - `npm run test:coverage`: runs the test suite with coverage reporting.
-- `npm run verify`: runs the complete quality gate expected before commits, including build.
+- `npm run verify`: runs the complete quality gate expected before commits and before a stack is considered ready, including build.
 
-No feature should be committed if `npm run verify` fails. If build, lint, formatting, or tests fail, fix the failure before committing.
+No feature should be committed if `npm run verify` fails. No stack should be reported as ready if `npm run verify` fails on its final top branch. If build, lint, formatting, tests, or coverage fail, fix the failure before committing or before reporting the stack as complete.
 
 ## 27. Test Coverage
 
