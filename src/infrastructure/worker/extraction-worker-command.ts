@@ -69,7 +69,10 @@ import {
   parseAssaiPlaywrightCommandOptions,
 } from './assai-playwright-command-options';
 import { parseCarnaubaPlaywrightCommandOptions } from './carnauba-playwright-command-options';
-import { parseExtractionWorkerCommandOptions } from './extraction-worker-command-options';
+import {
+  filterExtractionWorkerCommandArguments,
+  parseExtractionWorkerCommandOptions,
+} from './extraction-worker-command-options';
 import { parseMixMateusPlaywrightCommandOptions } from './mixmateus-playwright-command-options';
 import { parseSuperDoPovoPlaywrightCommandOptions } from './superdopovo-playwright-command-options';
 
@@ -86,17 +89,15 @@ async function main(): Promise<void> {
 
 async function run(): Promise<void> {
   const workerOptions = parseExtractionWorkerCommandOptions(process.argv.slice(2), process.env);
-  const carnaubaOptions = parseCarnaubaPlaywrightCommandOptions(process.argv.slice(2), process.env);
+  const scraperArgs = filterExtractionWorkerCommandArguments(process.argv.slice(2));
+  const carnaubaOptions = parseCarnaubaPlaywrightCommandOptions(scraperArgs, process.env);
   const superDoPovoOptions = parseSuperDoPovoPlaywrightCommandOptions(
-    process.argv.slice(2),
+    scraperArgs,
     process.env,
   );
-  const mixMateusOptions = parseMixMateusPlaywrightCommandOptions(
-    process.argv.slice(2),
-    process.env,
-  );
-  const atacadaoOptions = parseAtacadaoPlaywrightCommandOptions(process.argv.slice(2), process.env);
-  const assaiOptions = parseAssaiPlaywrightCommandOptions(process.argv.slice(2), process.env);
+  const mixMateusOptions = parseMixMateusPlaywrightCommandOptions(scraperArgs, process.env);
+  const atacadaoOptions = parseAtacadaoPlaywrightCommandOptions(scraperArgs, process.env);
+  const assaiOptions = parseAssaiPlaywrightCommandOptions(scraperArgs, process.env);
   const logger = createLogger(process.env);
   const clock = new SystemClock();
   const visualDatasetRootDirectory = resolve(

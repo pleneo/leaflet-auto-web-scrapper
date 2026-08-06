@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  filterExtractionWorkerCommandArguments,
   InvalidExtractionWorkerCommandOptionsError,
   parseExtractionWorkerCommandOptions,
 } from './extraction-worker-command-options';
@@ -106,5 +107,21 @@ describe('parseExtractionWorkerCommandOptions', () => {
     expect(() =>
       parseExtractionWorkerCommandOptions(['--visual-dataset-capture-policy', 'sometimes'], {}),
     ).toThrow();
+  });
+
+  it('filters worker-only arguments before scraper-specific option parsing', () => {
+    expect(
+      filterExtractionWorkerCommandArguments([
+        '--only',
+        'mixmateus',
+        '--extraction-mode',
+        'api',
+        '--run-once',
+        '--mixmateus-timeout-ms',
+        '1000',
+        '--visual-dataset-capture-policy',
+        'disabled',
+      ]),
+    ).toEqual(['--mixmateus-timeout-ms', '1000']);
   });
 });
