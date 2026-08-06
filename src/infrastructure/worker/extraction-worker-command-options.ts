@@ -2,8 +2,10 @@ import {
   parseVisualDatasetCapturePolicy,
   type VisualDatasetCapturePolicy,
 } from '../../domain/dataset/visual-dataset-capture-policy';
+import type { ExtractionMode } from '../../domain/extraction/extraction-target';
 
 export interface ExtractionWorkerCommandOptions {
+  readonly extractionMode: ExtractionMode;
   readonly intervalMs: number;
   readonly runImmediately: boolean;
   readonly retryBaseDelayMs: number;
@@ -27,6 +29,9 @@ export function parseExtractionWorkerCommandOptions(
   const values = parseNamedArguments(args);
 
   return {
+    extractionMode: parseExtractionMode(
+      readOption(values, env, 'extraction-mode', 'EXTRACTION_MODE', 'playwright'),
+    ),
     intervalMs:
       readPositiveInteger(values, env, 'interval-minutes', 'WORKER_INTERVAL_MINUTES', 60) *
       60 *
@@ -64,6 +69,19 @@ export function parseExtractionWorkerCommandOptions(
       ),
     ),
   };
+}
+
+function parseExtractionMode(value: string): ExtractionMode {
+  switch (value) {
+    case 'api':
+    case 'hybrid':
+    case 'playwright':
+      return value;
+    default:
+      throw new InvalidExtractionWorkerCommandOptionsError(
+        '--extraction-mode must be api, hybrid, or playwright.',
+      );
+  }
 }
 
 function parseNamedArguments(args: readonly string[]): ReadonlyMap<string, string> {
