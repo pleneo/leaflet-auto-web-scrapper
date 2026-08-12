@@ -40,6 +40,9 @@ import { MercadappCarnaubaApiClient } from '../scrapers/carnauba/mercadapp-api-c
 import { PlaywrightCarnaubaLeafletPageFactory } from '../scrapers/carnauba/playwright-carnauba-leaflet-page.factory';
 import { PlaywrightMercadappAuthTokenProvider } from '../scrapers/carnauba/playwright-mercadapp-auth-token-provider';
 import { StoreSnapshotCache } from '../scrapers/carnauba/store-snapshot-cache';
+import { MixMateusApiClient } from '../scrapers/mixmateus/mixmateus-api-client';
+import { MixMateusApiExtractionService } from '../scrapers/mixmateus/mixmateus-api-extraction';
+import { MixMateusApiStrategyAdapter } from '../scrapers/mixmateus/mixmateus-api-strategy-adapter';
 import { MixMateusLeafletExtractor } from '../scrapers/mixmateus/mixmateus-leaflet-extractor';
 import { MixMateusPlaywrightStrategyAdapter } from '../scrapers/mixmateus/mixmateus-playwright-strategy-adapter';
 import { listMixMateusMonitoredStores } from '../scrapers/mixmateus/mixmateus-targets';
@@ -66,7 +69,10 @@ import {
   parseAssaiPlaywrightCommandOptions,
 } from './assai-playwright-command-options';
 import { parseCarnaubaPlaywrightCommandOptions } from './carnauba-playwright-command-options';
-import { parseExtractionWorkerCommandOptions } from './extraction-worker-command-options';
+import {
+  filterExtractionWorkerCommandArguments,
+  parseExtractionWorkerCommandOptions,
+} from './extraction-worker-command-options';
 import { parseMixMateusPlaywrightCommandOptions } from './mixmateus-playwright-command-options';
 import { parseSuperDoPovoPlaywrightCommandOptions } from './superdopovo-playwright-command-options';
 
@@ -83,17 +89,12 @@ async function main(): Promise<void> {
 
 async function run(): Promise<void> {
   const workerOptions = parseExtractionWorkerCommandOptions(process.argv.slice(2), process.env);
-  const carnaubaOptions = parseCarnaubaPlaywrightCommandOptions(process.argv.slice(2), process.env);
-  const superDoPovoOptions = parseSuperDoPovoPlaywrightCommandOptions(
-    process.argv.slice(2),
-    process.env,
-  );
-  const mixMateusOptions = parseMixMateusPlaywrightCommandOptions(
-    process.argv.slice(2),
-    process.env,
-  );
-  const atacadaoOptions = parseAtacadaoPlaywrightCommandOptions(process.argv.slice(2), process.env);
-  const assaiOptions = parseAssaiPlaywrightCommandOptions(process.argv.slice(2), process.env);
+  const scraperArgs = filterExtractionWorkerCommandArguments(process.argv.slice(2));
+  const carnaubaOptions = parseCarnaubaPlaywrightCommandOptions(scraperArgs, process.env);
+  const superDoPovoOptions = parseSuperDoPovoPlaywrightCommandOptions(scraperArgs, process.env);
+  const mixMateusOptions = parseMixMateusPlaywrightCommandOptions(scraperArgs, process.env);
+  const atacadaoOptions = parseAtacadaoPlaywrightCommandOptions(scraperArgs, process.env);
+  const assaiOptions = parseAssaiPlaywrightCommandOptions(scraperArgs, process.env);
   const logger = createLogger(process.env);
   const clock = new SystemClock();
   const visualDatasetRootDirectory = resolve(
@@ -108,6 +109,10 @@ async function run(): Promise<void> {
   );
   const carnaubaApiStrategy = createCarnaubaApiStrategy(carnaubaOptions, clock, logger);
   const superDoPovoApiStrategy = createSuperDoPovoApiStrategy(superDoPovoOptions, clock, logger);
+  const mixMateusPlaywrightStrategy = createPlaywrightExtractionStrategy(
+    createMixMateusStrategy(mixMateusOptions, visualDatasetRootDirectory, clock, logger),
+  );
+  const mixMateusApiStrategy = createMixMateusApiStrategy(mixMateusOptions, clock, logger);
   const extractionStrategies: ExtractionStrategy[] = [
     carnaubaPlaywrightStrategy,
     carnaubaApiStrategy,
@@ -121,9 +126,12 @@ async function run(): Promise<void> {
       apiStrategy: superDoPovoApiStrategy,
       playwrightStrategy: superDoPovoPlaywrightStrategy,
     }),
-    createPlaywrightExtractionStrategy(
-      createMixMateusStrategy(mixMateusOptions, visualDatasetRootDirectory, clock, logger),
-    ),
+    mixMateusPlaywrightStrategy,
+    mixMateusApiStrategy,
+    new HybridExtractionStrategy('mixmateus', {
+      apiStrategy: mixMateusApiStrategy,
+      playwrightStrategy: mixMateusPlaywrightStrategy,
+    }),
     createPlaywrightExtractionStrategy(
       createAtacadaoStrategy(atacadaoOptions, visualDatasetRootDirectory, clock, logger),
     ),
@@ -456,6 +464,36 @@ function createMixMateusStrategy(
   );
 }
 
+function createMixMateusApiStrategy(
+  options: ReturnType<typeof parseMixMateusPlaywrightCommandOptions>,
+  clock: SystemClock,
+  logger: Logger,
+): MixMateusApiStrategyAdapter {
+  const apiClient = new MixMateusApiClient({
+    baseUrl: options.siteBaseUrl,
+  });
+  const extractionService = new MixMateusApiExtractionService(
+    apiClient,
+    apiClient,
+    apiClient,
+    clock,
+    logger,
+  );
+
+  return new MixMateusApiStrategyAdapter(
+    {
+      extractionInput: {
+        stores: listMixMateusMonitoredStores(),
+      },
+      outputRootDirectory: resolve(process.cwd(), options.outputRootDirectory),
+    },
+    {
+      extractionService,
+      storage: new LocalSharedPdfLeafletStorage(new FetchLeafletPdfHttpClient()),
+    },
+  );
+}
+
 function createAtacadaoStrategy(
   options: ReturnType<typeof parseAtacadaoPlaywrightCommandOptions>,
   visualDatasetRootDirectory: string,
@@ -612,7 +650,9 @@ function resolveWorkerTargetMode(
 }
 
 function supportsApiExtraction(supermarketId: SupermarketId): boolean {
-  return supermarketId === 'carnauba' || supermarketId === 'superdopovo';
+  return (
+    supermarketId === 'carnauba' || supermarketId === 'superdopovo' || supermarketId === 'mixmateus'
+  );
 }
 
 function delay(durationMs: number): Promise<void> {
