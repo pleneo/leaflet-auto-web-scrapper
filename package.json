@@ -29,6 +29,7 @@
     "worker:mixmateus": "npm run worker -- --only mixmateus",
     "worker:atacadao": "npm run worker -- --only atacadao",
     "worker:assai": "npm run worker -- --only assai",
+    "worker:angeloni": "npm run worker -- --only angeloni",
     "capture:smoke": "tsx src/infrastructure/worker/visual-capture-smoke-command.ts",
     "carnauba:leaflets:smoke": "tsx src/infrastructure/worker/carnauba-leaflets-smoke-command.ts",
     "carnauba:playwright": "tsx src/infrastructure/worker/carnauba-playwright-command.ts",
