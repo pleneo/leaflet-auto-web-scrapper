@@ -204,9 +204,7 @@ function createService(
   return new AngeloniApiExtractionService(provider, new FixedClock(), logger);
 }
 
-function createRegion(
-  overrides: Partial<AngeloniMonitoredRegion> = {},
-): AngeloniMonitoredRegion {
+function createRegion(overrides: Partial<AngeloniMonitoredRegion> = {}): AngeloniMonitoredRegion {
   return {
     regionSlug: 'regiao-florianopolis',
     regionName: 'Florianópolis',
