@@ -77,15 +77,57 @@ describe('ExtractionStrategyRegistry', () => {
     ).toThrow(ExtractionStrategyNotFoundError);
   });
 
-  it('wraps an existing Playwright strategy with the Playwright extraction mode', () => {
-    const strategy = createPlaywrightExtractionStrategy({
-      supermarketId: 'assai',
-      execute() {
-        return Promise.reject(new Error('Strategy execution is not used by this test.'));
-      },
-    });
+  it('wraps an existing Playwright strategy with the Playwright extraction mode', async () => {
+    const innerStrategy = new ClassBackedPlaywrightStrategy();
+    const strategy = createPlaywrightExtractionStrategy(innerStrategy);
 
     expect(strategy.mode).toBe('playwright');
     expect(strategy.supermarketId).toBe('assai');
+    await expect(strategy.execute(createStrategyInput())).resolves.toMatchObject({
+      supermarketId: 'assai',
+      status: 'succeeded',
+    });
   });
 });
+
+class ClassBackedPlaywrightStrategy implements Omit<ExtractionStrategy, 'mode'> {
+  readonly supermarketId = 'assai';
+
+  execute(): ReturnType<ExtractionStrategy['execute']> {
+    return Promise.resolve({
+      runId: 'run-1',
+      targetId: 'assai',
+      supermarketId: 'assai',
+      status: 'succeeded',
+      leafletsFound: 0,
+      artifactsDownloaded: 0,
+      artifactsReused: 0,
+      datasetSamplesCreated: 0,
+      units: [],
+      failures: [],
+    });
+  }
+}
+
+function createStrategyInput(): Parameters<ExtractionStrategy['execute']>[0] {
+  return {
+    runId: 'run-1',
+    target: createExtractionTarget({
+      targetId: 'assai',
+      supermarketId: 'assai',
+      supermarketName: 'Assaí',
+      mode: 'playwright',
+      enabled: true,
+      intervalMinutes: 60,
+      maxAttempts: 1,
+    }),
+    startedAtIso: '2026-08-12T12:00:00.000Z',
+    visualDatasetCapturePolicy: 'disabled',
+    logger: {
+      debug: () => undefined,
+      info: () => undefined,
+      warn: () => undefined,
+      error: () => undefined,
+    },
+  };
+}

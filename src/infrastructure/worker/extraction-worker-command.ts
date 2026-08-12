@@ -21,6 +21,16 @@ import { ConsoleLogger } from '../logging/console-logger';
 import { JsonLogger } from '../logging/json-logger';
 import { FileSystemExtractionStateRepository } from '../repositories/file-system-extraction-state-repository';
 import { FileSystemVisualDatasetSampleRepository } from '../repositories/file-system-visual-dataset-sample-repository';
+import { AngeloniApiClient } from '../scrapers/angeloni/angeloni-api-client';
+import { AngeloniApiExtractionService } from '../scrapers/angeloni/angeloni-api-extraction';
+import { AngeloniApiStrategyAdapter } from '../scrapers/angeloni/angeloni-api-strategy-adapter';
+import { AngeloniLeafletExtractor } from '../scrapers/angeloni/angeloni-leaflet-extractor';
+import { AngeloniPlaywrightStrategyAdapter } from '../scrapers/angeloni/angeloni-playwright-strategy-adapter';
+import {
+  ANGELONI_HOME_URL,
+  listAngeloniMonitoredRegions,
+} from '../scrapers/angeloni/angeloni-targets';
+import { PlaywrightAngeloniLeafletPageFactory } from '../scrapers/angeloni/playwright-angeloni-leaflet-page.factory';
 import { AssaiLeafletExtractor } from '../scrapers/assai/assai-leaflet-extractor';
 import { FetchAssaiOfferCatalogClient } from '../scrapers/assai/assai-offer-catalog';
 import { AssaiPlaywrightStrategyAdapter } from '../scrapers/assai/assai-playwright-strategy-adapter';
@@ -113,6 +123,10 @@ async function run(): Promise<void> {
     createMixMateusStrategy(mixMateusOptions, visualDatasetRootDirectory, clock, logger),
   );
   const mixMateusApiStrategy = createMixMateusApiStrategy(mixMateusOptions, clock, logger);
+  const angeloniPlaywrightStrategy = createPlaywrightExtractionStrategy(
+    createAngeloniStrategy(visualDatasetRootDirectory, clock, logger),
+  );
+  const angeloniApiStrategy = createAngeloniApiStrategy(clock, logger);
   const extractionStrategies: ExtractionStrategy[] = [
     carnaubaPlaywrightStrategy,
     carnaubaApiStrategy,
@@ -138,6 +152,12 @@ async function run(): Promise<void> {
     createPlaywrightExtractionStrategy(
       createAssaiStrategy(assaiOptions, visualDatasetRootDirectory, clock, logger),
     ),
+    angeloniPlaywrightStrategy,
+    angeloniApiStrategy,
+    new HybridExtractionStrategy('angeloni', {
+      apiStrategy: angeloniApiStrategy,
+      playwrightStrategy: angeloniPlaywrightStrategy,
+    }),
   ];
   const runner = new ScheduledExtractionRunner(
     {
@@ -189,6 +209,15 @@ async function run(): Promise<void> {
           supermarketId: 'assai',
           supermarketName: 'Assaí Atacadista',
           mode: resolveWorkerTargetMode(workerOptions.extractionMode, 'assai'),
+          enabled: true,
+          intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
+          maxAttempts: 1,
+        }),
+        createExtractionTarget({
+          targetId: 'angeloni',
+          supermarketId: 'angeloni',
+          supermarketName: 'Angeloni Supermercados',
+          mode: resolveWorkerTargetMode(workerOptions.extractionMode, 'angeloni'),
           enabled: true,
           intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
           maxAttempts: 1,
@@ -588,6 +617,74 @@ function createAssaiStrategy(
   );
 }
 
+function createAngeloniStrategy(
+  visualDatasetRootDirectory: string,
+  clock: SystemClock,
+  logger: Logger,
+): AngeloniPlaywrightStrategyAdapter {
+  const visualDatasetCaptureService =
+    visualDatasetRootDirectory.trim().length > 0
+      ? new VisualDatasetCaptureService(
+          new FileSystemVisualDatasetSampleRepository({
+            rootDirectory: visualDatasetRootDirectory,
+          }),
+          clock,
+        )
+      : undefined;
+  const extractionService = new AngeloniLeafletExtractor(
+    new PlaywrightAngeloniLeafletPageFactory(),
+    clock,
+    logger,
+    visualDatasetCaptureService,
+  );
+
+  return new AngeloniPlaywrightStrategyAdapter(
+    {
+      extractionInput: {
+        homeUrl: ANGELONI_HOME_URL,
+        regions: listAngeloniMonitoredRegions(),
+        viewport: {
+          width: 1366,
+          height: 768,
+          deviceScaleFactor: 1,
+        },
+        timeoutMs: 60_000,
+        regionTimeoutMs: 60_000,
+        maxRegionAttempts: 2,
+        settleDelayMs: 3_000,
+      },
+      outputRootDirectory: resolve(process.cwd(), '.data/leaflets-playwright'),
+      visualDatasetRootDirectory,
+      visualDatasetSplit: 'unassigned',
+    },
+    {
+      extractionService,
+      storage: new LocalSharedPdfLeafletStorage(new FetchLeafletPdfHttpClient()),
+      countVisualDatasetSamples,
+    },
+  );
+}
+
+function createAngeloniApiStrategy(clock: SystemClock, logger: Logger): AngeloniApiStrategyAdapter {
+  const apiClient = new AngeloniApiClient({
+    baseUrl: ANGELONI_HOME_URL,
+  });
+  const extractionService = new AngeloniApiExtractionService(apiClient, clock, logger);
+
+  return new AngeloniApiStrategyAdapter(
+    {
+      extractionInput: {
+        regions: listAngeloniMonitoredRegions(),
+      },
+      outputRootDirectory: resolve(process.cwd(), '.data/leaflets-api'),
+    },
+    {
+      extractionService,
+      storage: new LocalSharedPdfLeafletStorage(new FetchLeafletPdfHttpClient()),
+    },
+  );
+}
+
 async function runCycle(runner: ScheduledExtractionRunner, shutdown: ShutdownState): Promise<void> {
   shutdown.activeCycle = runner.runCycle().then(() => undefined);
   await shutdown.activeCycle.finally(() => {
@@ -651,7 +748,10 @@ function resolveWorkerTargetMode(
 
 function supportsApiExtraction(supermarketId: SupermarketId): boolean {
   return (
-    supermarketId === 'carnauba' || supermarketId === 'superdopovo' || supermarketId === 'mixmateus'
+    supermarketId === 'carnauba' ||
+    supermarketId === 'superdopovo' ||
+    supermarketId === 'mixmateus' ||
+    supermarketId === 'angeloni'
   );
 }
 

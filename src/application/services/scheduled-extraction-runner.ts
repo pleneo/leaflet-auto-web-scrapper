@@ -237,6 +237,7 @@ export class ScheduledExtractionRunner {
           targetId: target.targetId,
           attempt,
           runId,
+          errorMessage: lastErrorMessage,
         });
 
         if (attempt < target.maxAttempts) {
