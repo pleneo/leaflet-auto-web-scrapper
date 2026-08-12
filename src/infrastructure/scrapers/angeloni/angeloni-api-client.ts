@@ -52,7 +52,9 @@ export function parseAngeloniRegionLeaflets(
   let anchorMatch = anchorExpression.exec(html);
 
   while (anchorMatch !== null) {
-    const href = readHrefAttribute(anchorMatch[1] ?? '');
+    const href = isInsideFullyHiddenElementorBlock(html, anchorMatch.index)
+      ? null
+      : readHrefAttribute(anchorMatch.slice(1, 2).join(''));
 
     if (href !== null) {
       const pdfUrl = resolvePdfUrl(href, sourcePageUrl);
@@ -60,7 +62,7 @@ export function parseAngeloniRegionLeaflets(
       if (pdfUrl !== null && !leaflets.has(pdfUrl)) {
         leaflets.set(pdfUrl, {
           leafletId: createAngeloniLeafletId(pdfUrl),
-          title: readAnchorTitle(anchorMatch[2] ?? '', pdfUrl),
+          title: readAnchorTitle(anchorMatch.slice(2, 3).join(''), pdfUrl),
           pdfUrl,
           sourcePageUrl,
         });
@@ -73,16 +75,37 @@ export function parseAngeloniRegionLeaflets(
   return [...leaflets.values()];
 }
 
+function isInsideFullyHiddenElementorBlock(html: string, anchorIndex: number): boolean {
+  const nearbyOpeningTag = html.slice(Math.max(0, anchorIndex - 1_000), anchorIndex);
+  const markerStart = nearbyOpeningTag.lastIndexOf('elementor-hidden-desktop');
+
+  if (markerStart < 0) {
+    return false;
+  }
+
+  const candidateTag = nearbyOpeningTag.slice(markerStart);
+
+  if (candidateTag.includes('</div>')) {
+    return false;
+  }
+
+  return (
+    candidateTag.includes('elementor-hidden-desktop') &&
+    candidateTag.includes('elementor-hidden-tablet') &&
+    candidateTag.includes('elementor-hidden-mobile')
+  );
+}
+
 function readHrefAttribute(anchorAttributes: string): string | null {
   const quotedMatch = /\bhref\s*=\s*(["'])(.*?)\1/i.exec(anchorAttributes);
 
   if (quotedMatch !== null) {
-    const value = quotedMatch[2]?.trim() ?? '';
+    const value = quotedMatch.slice(2, 3).join('').trim();
     return value.length === 0 ? null : decodeHtmlText(value);
   }
 
   const unquotedMatch = /\bhref\s*=\s*([^\s>]+)/i.exec(anchorAttributes);
-  const value = unquotedMatch?.[1]?.trim() ?? '';
+  const value = unquotedMatch === null ? '' : unquotedMatch.slice(1, 2).join('').trim();
 
   return value.length === 0 ? null : decodeHtmlText(value);
 }
@@ -126,7 +149,7 @@ function readAnchorTitle(anchorBody: string, pdfUrl: string): string {
 
 function titleFromPdfUrl(pdfUrl: string): string {
   const url = new URL(pdfUrl);
-  const fileName = url.pathname.split('/').at(-1) ?? 'angeloni-leaflet.pdf';
+  const fileName = url.pathname.substring(url.pathname.lastIndexOf('/') + 1);
   const withoutExtension = fileName.replace(/\.pdf$/i, '');
   const decoded = decodeURIComponent(withoutExtension);
 

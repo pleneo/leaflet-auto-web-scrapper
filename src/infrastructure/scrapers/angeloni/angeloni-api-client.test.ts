@@ -37,9 +37,7 @@ describe('AngeloniApiClient', () => {
         sourcePageUrl: 'https://encartes.angeloni.com.br/regiao-florianopolis/',
       },
     ]);
-    expect(getFetchUrl(fetcher, 0)).toBe(
-      'https://encartes.angeloni.com.br/regiao-florianopolis/',
-    );
+    expect(getFetchUrl(fetcher, 0)).toBe('https://encartes.angeloni.com.br/regiao-florianopolis/');
   });
 
   it('parses fallback titles from PDF filenames and decodes HTML entities', () => {
@@ -48,8 +46,9 @@ describe('AngeloniApiClient', () => {
       `
         <a href="/downloads/Ofertas%20Angeloni.pdf"></a>
         <a href="https://statics.angeloni.com.br/encartes/Bazar/BlackFridayAngeloni.pdf">
-          Ofertas &amp; Bazar &#8211; SC
+          Ofertas &amp; Bazar &#x2013; SC &#33;
         </a>
+        <a href=/encartes/Tematica/SemanaCliente.pdf>Semana Cliente</a>
       `,
     );
 
@@ -62,8 +61,14 @@ describe('AngeloniApiClient', () => {
       },
       {
         leafletId: 'angeloni-encartes-bazar-blackfridayangeloni',
-        title: 'Ofertas & Bazar – SC',
+        title: 'Ofertas & Bazar – SC !',
         pdfUrl: 'https://statics.angeloni.com.br/encartes/Bazar/BlackFridayAngeloni.pdf',
+        sourcePageUrl: 'https://encartes.angeloni.com.br/regiao-florianopolis/',
+      },
+      {
+        leafletId: 'angeloni-encartes-tematica-semanacliente',
+        title: 'Semana Cliente',
+        pdfUrl: 'https://encartes.angeloni.com.br/encartes/Tematica/SemanaCliente.pdf',
         sourcePageUrl: 'https://encartes.angeloni.com.br/regiao-florianopolis/',
       },
     ]);
@@ -73,15 +78,27 @@ describe('AngeloniApiClient', () => {
     const leaflets = parseAngeloniRegionLeaflets(
       'https://encartes.angeloni.com.br/regiao-florianopolis/',
       `
+        <div class="elementor-hidden-desktop elementor-hidden-tablet elementor-hidden-mobile">
+          <a href="https://statics.angeloni.com.br/encartes/Tematica/biscoitos_SC.pdf">Hidden</a>
+        </div>
         <a href="nota-fiscal.html">HTML</a>
         <a href="mailto:test@example.com">Email</a>
         <a href="https://statics.angeloni.com.br/encartes/image.png">Image</a>
         <a href="">Blank</a>
+        <a class="without-href">Missing href</a>
+        <a href="http://[broken">Broken</a>
+        <a href="/.pdf">Empty signature</a>
         <a href="https://statics.angeloni.com.br/encartes/Oferta.pdf#page=1">PDF</a>
       `,
     );
 
     expect(leaflets).toEqual([
+      {
+        leafletId: 'angeloni-leaflet',
+        title: 'Empty signature',
+        pdfUrl: 'https://encartes.angeloni.com.br/.pdf',
+        sourcePageUrl: 'https://encartes.angeloni.com.br/regiao-florianopolis/',
+      },
       {
         leafletId: 'angeloni-encartes-oferta',
         title: 'PDF',
@@ -92,6 +109,9 @@ describe('AngeloniApiClient', () => {
   });
 
   it('rejects invalid constructor and query URLs', async () => {
+    expect(
+      () => new AngeloniApiClient({ baseUrl: 'https://encartes.angeloni.com.br/' }),
+    ).not.toThrow();
     expect(() => new AngeloniApiClient({ baseUrl: 'invalid-url' })).toThrow(
       'baseUrl must be absolute and valid.',
     );
@@ -119,6 +139,9 @@ describe('AngeloniApiClient', () => {
     await expect(
       client.listRegionLeaflets({ regionUrl: 'https://example.com/regiao-florianopolis/' }),
     ).rejects.toThrow('regionUrl must belong to the configured Angeloni origin.');
+    await expect(
+      client.listRegionLeaflets({ regionUrl: 'ftp://encartes.angeloni.com.br/regiao/' }),
+    ).rejects.toThrow('regionUrl must be an absolute http(s) URL.');
   });
 
   it('rejects regional page HTTP failures and blank parser inputs', async () => {
@@ -141,10 +164,7 @@ describe('AngeloniApiClient', () => {
       'sourcePageUrl cannot be blank.',
     );
     expect(() =>
-      parseAngeloniRegionLeaflets(
-        'https://encartes.angeloni.com.br/regiao-florianopolis/',
-        ' ',
-      ),
+      parseAngeloniRegionLeaflets('https://encartes.angeloni.com.br/regiao-florianopolis/', ' '),
     ).toThrow('html cannot be blank.');
   });
 });
