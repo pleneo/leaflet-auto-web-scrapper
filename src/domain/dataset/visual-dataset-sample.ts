@@ -156,6 +156,24 @@ export interface AssaiLeafletFlowVisualDatasetSubject {
   readonly targetIndex: number | null;
 }
 
+export interface AngeloniRegionSelectionVisualDatasetSubject {
+  readonly subjectKind: 'angeloni-region-selection';
+  readonly regionSlug: string;
+  readonly regionName: string;
+  readonly stateCode: string;
+  readonly cityName: string;
+}
+
+export interface AngeloniLeafletLinkVisualDatasetSubject {
+  readonly subjectKind: 'angeloni-leaflet-link';
+  readonly regionSlug: string;
+  readonly regionName: string;
+  readonly stateCode: string;
+  readonly cityName: string;
+  readonly cardIndex: number;
+  readonly leafletTitle: string;
+}
+
 export type VisualDatasetSubject =
   | CarnaubaHomeLeafletsLinkVisualDatasetSubject
   | CarnaubaLeafletCardVisualDatasetSubject
@@ -174,7 +192,9 @@ export type VisualDatasetSubject =
   | AtacadaoStorePageVisualDatasetSubject
   | AtacadaoShowMoreLeafletsVisualDatasetSubject
   | AtacadaoLeafletCardVisualDatasetSubject
-  | AssaiLeafletFlowVisualDatasetSubject;
+  | AssaiLeafletFlowVisualDatasetSubject
+  | AngeloniRegionSelectionVisualDatasetSubject
+  | AngeloniLeafletLinkVisualDatasetSubject;
 
 export interface VisualDatasetSample {
   readonly sampleId: string;
