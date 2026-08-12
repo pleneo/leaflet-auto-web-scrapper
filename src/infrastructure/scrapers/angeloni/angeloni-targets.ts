@@ -32,9 +32,8 @@ export function findAngeloniMonitoredRegion(regionUrl: string): AngeloniMonitore
   const normalizedUrl = normalizeUrl(regionUrl);
 
   return (
-    ANGELONI_MONITORED_REGIONS.find(
-      (region) => normalizeUrl(region.regionUrl) === normalizedUrl,
-    ) ?? null
+    ANGELONI_MONITORED_REGIONS.find((region) => normalizeUrl(region.regionUrl) === normalizedUrl) ??
+    null
   );
 }
 
