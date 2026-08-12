@@ -49,12 +49,19 @@ describe('AngeloniPlaywrightStrategyAdapter', () => {
       ...createExtractionResult(),
       failedRegions: [],
     });
-    const adapter = createAdapter(extractionService, new FakeStorage(createStoredExtraction()));
+    const adapter = createAdapter(
+      extractionService,
+      new FakeStorage({
+        ...createStoredExtraction(),
+        sharedLeaflets: [],
+      }),
+    );
 
     const output = await adapter.execute(createInput('disabled'));
 
     expect(output.status).toBe('succeeded');
     expect(output.datasetSamplesCreated).toBe(0);
+    expect(output.units[0]?.leaflets[0]?.artifactCount).toBe(0);
     expect(extractionService.inputs[0]?.visualDataset).toBeUndefined();
   });
 
