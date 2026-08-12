@@ -61,7 +61,13 @@ describe('parseVisualCaptureSmokeCommandOptions', () => {
   });
 
   it('accepts every known supermarket id', () => {
-    const supermarketIds = ['assai', 'carnauba', 'generic-supermarket', 'sao-luiz'] as const;
+    const supermarketIds = [
+      'angeloni',
+      'assai',
+      'carnauba',
+      'generic-supermarket',
+      'sao-luiz',
+    ] as const;
 
     for (const supermarketId of supermarketIds) {
       expect(

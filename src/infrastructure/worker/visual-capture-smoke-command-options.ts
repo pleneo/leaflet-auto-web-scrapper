@@ -181,6 +181,7 @@ function readOptionalBoolean(
 
 function parseSupermarketId(value: string): SupermarketId {
   switch (value) {
+    case 'angeloni':
     case 'assai':
     case 'carnauba':
     case 'generic-supermarket':
@@ -188,7 +189,7 @@ function parseSupermarketId(value: string): SupermarketId {
       return value;
     default:
       throw new InvalidVisualCaptureSmokeCommandOptionsError(
-        '--supermarket must be one of: assai, carnauba, generic-supermarket, sao-luiz.',
+        '--supermarket must be one of: angeloni, assai, carnauba, generic-supermarket, sao-luiz.',
       );
   }
 }

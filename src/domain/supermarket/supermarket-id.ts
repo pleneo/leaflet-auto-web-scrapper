@@ -4,5 +4,6 @@ export type SupermarketId =
   | 'mixmateus'
   | 'atacadao'
   | 'assai'
+  | 'angeloni'
   | 'sao-luiz'
   | 'generic-supermarket';
