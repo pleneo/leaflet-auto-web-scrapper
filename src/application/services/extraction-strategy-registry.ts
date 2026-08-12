@@ -38,8 +38,9 @@ export function createPlaywrightExtractionStrategy(
   strategy: Omit<ExtractionStrategy, 'mode'>,
 ): ExtractionStrategy {
   return {
-    ...strategy,
+    supermarketId: strategy.supermarketId,
     mode: 'playwright',
+    execute: (input) => strategy.execute(input),
   };
 }
 

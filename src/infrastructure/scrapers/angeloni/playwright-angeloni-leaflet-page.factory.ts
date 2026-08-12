@@ -218,7 +218,7 @@ class PlaywrightAngeloniLeafletPage implements AngeloniLeafletPage {
   }
 
   private pdfLinkLocator(): Locator {
-    return this.page.locator('a[href$=".pdf"], a[href*=".pdf?"]').filter({
+    return this.page.locator('a[href$=".pdf"]:visible, a[href*=".pdf?"]:visible').filter({
       hasText: /.+/,
     });
   }
