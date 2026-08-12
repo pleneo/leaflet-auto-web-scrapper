@@ -139,6 +139,60 @@ describe('AngeloniLeafletExtractor', () => {
     );
   });
 
+  it('uses fallback names for non-error failures and blank leaflet titles', async () => {
+    const page = new FakeAngeloniPage({
+      links: [
+        {
+          title: '!!!',
+          cardIndex: 0,
+          pdfUrl: 'https://statics.angeloni.com.br/encartes/blank.pdf',
+        },
+      ],
+      failWithNonErrorOnOpenRegion: true,
+    });
+    const extractor = createExtractor(new FakePageFactory([page]));
+
+    const failedResult = await extractor.extract(createInput());
+
+    expect(failedResult.failedRegions[0]?.errorMessage).toBe(
+      'Unexpected Angeloni region extraction failure.',
+    );
+
+    const successfulResult = await createExtractor(
+      new FakePageFactory([
+        new FakeAngeloniPage({
+          links: [
+            {
+              title: '!!!',
+              cardIndex: 0,
+              pdfUrl: 'https://statics.angeloni.com.br/encartes/blank.pdf',
+            },
+          ],
+        }),
+      ]),
+    ).extract(createInput());
+
+    expect(successfulResult.regions[0]?.leaflets[0]?.leafletId).toBe(
+      'regiao-florianopolis-01-leaflet',
+    );
+  });
+
+  it('fails a region when extraction times out', async () => {
+    const page = new FakeAngeloniPage({
+      neverResolveOpenRegion: true,
+    });
+    const extractor = createExtractor(new FakePageFactory([page]));
+
+    const result = await extractor.extract({
+      ...createInput(),
+      regionTimeoutMs: 1,
+    });
+
+    expect(result.failedRegions[0]?.errorMessage).toBe(
+      'Angeloni region regiao-florianopolis extraction timed out.',
+    );
+  });
+
   it('validates required input values', async () => {
     const extractor = createExtractor(new FakePageFactory([new FakeAngeloniPage()]));
 
@@ -166,6 +220,8 @@ describe('AngeloniLeafletExtractor', () => {
 interface FakeAngeloniPageConfig {
   readonly links?: readonly AngeloniLeafletLink[];
   readonly failOnOpenRegion?: boolean;
+  readonly failWithNonErrorOnOpenRegion?: boolean;
+  readonly neverResolveOpenRegion?: boolean;
 }
 
 class FakeAngeloniPage implements AngeloniLeafletPage {
@@ -175,9 +231,15 @@ class FakeAngeloniPage implements AngeloniLeafletPage {
 
   private readonly failOnOpenRegion: boolean;
 
+  private readonly failWithNonErrorOnOpenRegion: boolean;
+
+  private readonly neverResolveOpenRegion: boolean;
+
   constructor(config: FakeAngeloniPageConfig = {}) {
     this.links = config.links ?? [];
     this.failOnOpenRegion = config.failOnOpenRegion ?? false;
+    this.failWithNonErrorOnOpenRegion = config.failWithNonErrorOnOpenRegion ?? false;
+    this.neverResolveOpenRegion = config.neverResolveOpenRegion ?? false;
   }
 
   goto(url: string): Promise<void> {
@@ -205,6 +267,14 @@ class FakeAngeloniPage implements AngeloniLeafletPage {
 
     if (this.failOnOpenRegion) {
       return Promise.reject(new Error('Region link failed.'));
+    }
+
+    if (this.failWithNonErrorOnOpenRegion) {
+      return Promise.reject(createNonErrorRejectionReason());
+    }
+
+    if (this.neverResolveOpenRegion) {
+      return new Promise(() => undefined);
     }
 
     return Promise.resolve();
@@ -434,4 +504,11 @@ function createVisualTarget(locatorDescription: string): AngeloniLeafletVisualTa
     page: new FakeVisualDatasetPage(),
     target: new FakeVisualActionTarget(locatorDescription),
   };
+}
+
+function createNonErrorRejectionReason(): Error {
+  const error = new Error('Region failed.');
+  Object.setPrototypeOf(error, null);
+
+  return error;
 }
