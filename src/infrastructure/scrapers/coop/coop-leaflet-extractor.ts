@@ -17,12 +17,19 @@ import type {
   CoopLeafletPageFactory,
   CoopLeafletVisualTarget,
 } from './coop-leaflet-page';
-import { type CoopMonitoredStore, listCoopMonitoredStores } from './coop-targets';
+import {
+  COOP_HOME_URL,
+  COOP_OFFERS_URL,
+  type CoopMonitoredStore,
+  listCoopMonitoredStores,
+} from './coop-targets';
 
-export type CoopStartUrlMode = 'store-page';
+export type CoopStartUrlMode = 'store-page' | 'home';
 
 export interface ExtractCoopLeafletsInput {
   readonly startUrlMode: CoopStartUrlMode;
+  readonly homeUrl?: string;
+  readonly offersUrl?: string;
   readonly monitoredStores: readonly CoopMonitoredStore[];
   readonly viewport: VisualViewport;
   readonly timeoutMs: number;
@@ -122,14 +129,7 @@ export class CoopLeafletExtractor {
     input: ExtractCoopLeafletsInput,
     store: CoopMonitoredStore,
   ): Promise<CoopExtractedUnit> {
-    this.logger.info('Coop FSM state entered.', {
-      stateName: 'STORE_SELECTION',
-      storeSlug: store.storeSlug,
-      sourceUrl: store.finalPageUrl,
-    });
-    await page.goto(store.finalPageUrl);
-    await page.waitForStoreOffersPage(store);
-    await page.waitForTimeout(input.settleDelayMs);
+    await this.navigateToStore(page, input, store);
     const cards = await page.listLeafletCards();
 
     if (cards.length === 0) {
@@ -207,6 +207,92 @@ export class CoopLeafletExtractor {
       sourceUrl: store.finalPageUrl,
       leaflets,
     };
+  }
+
+  private async navigateToStore(
+    page: CoopLeafletPage,
+    input: ExtractCoopLeafletsInput,
+    store: CoopMonitoredStore,
+  ): Promise<void> {
+    if (input.startUrlMode === 'home') {
+      await this.navigateHomeToStore(page, input, store);
+      return;
+    }
+
+    this.logger.info('Coop FSM state entered.', {
+      stateName: 'STORE_SELECTION',
+      storeSlug: store.storeSlug,
+      sourceUrl: store.finalPageUrl,
+    });
+    await page.goto(store.finalPageUrl);
+    await page.waitForStoreOffersPage(store);
+    await page.waitForTimeout(input.settleDelayMs);
+  }
+
+  private async navigateHomeToStore(
+    page: CoopLeafletPage,
+    input: ExtractCoopLeafletsInput,
+    store: CoopMonitoredStore,
+  ): Promise<void> {
+    const homeUrl = input.homeUrl ?? COOP_HOME_URL;
+
+    this.logger.info('Coop FSM state entered.', {
+      stateName: 'ANCHOR_PAGE',
+      sourceUrl: homeUrl,
+    });
+    await page.goto(homeUrl);
+    await page.waitForHomePage();
+    await page.waitForTimeout(input.settleDelayMs);
+    await this.captureHomeOffersTarget(page, input);
+    await page.openHomeOffersPage();
+
+    this.logger.info('Coop FSM state entered.', {
+      stateName: 'LEAFLETS_PAGE',
+      sourceUrl: input.offersUrl ?? COOP_OFFERS_URL,
+    });
+    await page.waitForOffersPage();
+    await page.waitForTimeout(input.settleDelayMs);
+    await this.captureStoreLinkTarget(page, input, store);
+    await page.openStore(store);
+    await page.waitForStoreOffersPage(store);
+    await page.waitForTimeout(input.settleDelayMs);
+  }
+
+  private async captureHomeOffersTarget(
+    page: CoopLeafletPage,
+    input: ExtractCoopLeafletsInput,
+  ): Promise<void> {
+    const visualTarget = await page.getHomeOffersVisualTarget();
+    await this.captureBeforeAction(input, visualTarget, {
+      sampleId: createSampleId(input.visualDataset?.runId ?? 'coop', 'home-offers-link'),
+      stateName: 'ANCHOR_PAGE',
+      label: 'open_leaflets_page_button',
+      subject: {
+        subjectKind: 'coop-home-offers-link',
+      },
+    });
+  }
+
+  private async captureStoreLinkTarget(
+    page: CoopLeafletPage,
+    input: ExtractCoopLeafletsInput,
+    store: CoopMonitoredStore,
+  ): Promise<void> {
+    const visualTarget = await page.getStoreLinkVisualTarget(store);
+    await this.captureBeforeAction(input, visualTarget, {
+      sampleId: createSampleId(
+        input.visualDataset?.runId ?? 'coop',
+        `${store.storeSlug}-store-link`,
+      ),
+      stateName: 'LEAFLETS_PAGE',
+      label: 'select_store_button',
+      subject: {
+        subjectKind: 'coop-store-link',
+        storeSlug: store.storeSlug,
+        storeName: store.storeName,
+        storeUrl: store.finalPageUrl,
+      },
+    });
   }
 
   private async captureLeafletCardTarget(
@@ -295,6 +381,8 @@ export function createDefaultCoopLeafletExtractionInput(
 ): ExtractCoopLeafletsInput {
   return {
     startUrlMode: 'store-page',
+    homeUrl: COOP_HOME_URL,
+    offersUrl: COOP_OFFERS_URL,
     monitoredStores: listCoopMonitoredStores(),
     viewport,
     timeoutMs,
@@ -309,6 +397,14 @@ function validateInput(input: ExtractCoopLeafletsInput): void {
 
   if (input.timeoutMs <= 0) {
     throw new CoopLeafletExtractionError('timeoutMs must be positive.');
+  }
+
+  if (input.startUrlMode === 'home' && input.homeUrl?.trim().length === 0) {
+    throw new CoopLeafletExtractionError('homeUrl cannot be blank.');
+  }
+
+  if (input.startUrlMode === 'home' && input.offersUrl?.trim().length === 0) {
+    throw new CoopLeafletExtractionError('offersUrl cannot be blank.');
   }
 }
 

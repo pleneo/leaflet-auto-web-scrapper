@@ -79,6 +79,60 @@ describe('CoopLeafletExtractor', () => {
     });
   });
 
+  it('navigates from the home page and captures offers and store links', async () => {
+    const store = getStore('coop-super-agua-verde');
+    const page = new FakeCoopPage({
+      [store.storeSlug]: {
+        cards: [createCard()],
+        imageUrls: ['https://www.cooper.coop.br/revista/imagens/5010/1.jpg'],
+      },
+    });
+    const capture = new FakeVisualDatasetCaptureService();
+    const extractor = createExtractor(page, capture);
+
+    const result = await extractor.extract({
+      ...createInput([store]),
+      startUrlMode: 'home',
+      visualDataset: {
+        runId: 'run-1',
+        split: 'unassigned',
+      },
+    });
+
+    expect(result.failedUnits).toEqual([]);
+    expect(page.actions).toEqual(['goto:https://www.cooper.coop.br/', 'open-offers', 'open-store']);
+    expect(capture.inputs.map((input) => input.subject.subjectKind)).toEqual([
+      'coop-home-offers-link',
+      'coop-store-link',
+      'coop-leaflet-card',
+      'coop-leaflet-image',
+    ]);
+    expect(capture.inputs[1]).toMatchObject({
+      sampleId: 'run-1-coop-coop-super-agua-verde-store-link',
+      stateName: 'LEAFLETS_PAGE',
+      label: 'select_store_button',
+    });
+  });
+
+  it('supports home navigation without visual dataset capture enabled', async () => {
+    const store = getStore('coop-super-agua-verde');
+    const page = new FakeCoopPage({
+      [store.storeSlug]: {
+        cards: [createCard()],
+        imageUrls: ['https://www.cooper.coop.br/revista/imagens/5010/1.jpg'],
+      },
+    });
+    const extractor = createExtractor(page);
+
+    const result = await extractor.extract({
+      ...createInput([store]),
+      startUrlMode: 'home',
+    });
+
+    expect(result.units).toHaveLength(1);
+    expect(page.actions).toEqual(['goto:https://www.cooper.coop.br/', 'open-offers', 'open-store']);
+  });
+
   it('preserves successful stores when another direct store fails', async () => {
     const successStore = getStore('coop-super-agua-verde');
     const failedStore = getStore('coop-atacarejo-boa-vista');
@@ -148,6 +202,20 @@ describe('CoopLeafletExtractor', () => {
         timeoutMs: 0,
       }),
     ).rejects.toThrow('timeoutMs must be positive.');
+    await expect(
+      extractor.extract({
+        ...defaultInput,
+        startUrlMode: 'home',
+        homeUrl: ' ',
+      }),
+    ).rejects.toThrow('homeUrl cannot be blank.');
+    await expect(
+      extractor.extract({
+        ...defaultInput,
+        startUrlMode: 'home',
+        offersUrl: ' ',
+      }),
+    ).rejects.toThrow('offersUrl cannot be blank.');
     expect(new CoopLeafletExtractionError('x').name).toBe('CoopLeafletExtractionError');
   });
 });
@@ -230,6 +298,8 @@ class FakeCoopPageFactory implements CoopLeafletPageFactory {
 class FakeCoopPage implements CoopLeafletPage {
   readonly visitedUrls: string[] = [];
 
+  readonly actions: string[] = [];
+
   readonly magazinePages: FakeCoopMagazinePage[] = [];
 
   closed = false;
@@ -243,6 +313,7 @@ class FakeCoopPage implements CoopLeafletPage {
   }
 
   goto(url: string): Promise<void> {
+    this.actions.push(`goto:${url}`);
     this.visitedUrls.push(url);
     this.currentStoreSlug =
       listCoopMonitoredStores().find((store) => store.finalPageUrl === url)?.storeSlug ?? null;
@@ -278,6 +349,7 @@ class FakeCoopPage implements CoopLeafletPage {
   }
 
   openHomeOffersPage(): Promise<void> {
+    this.actions.push('open-offers');
     return Promise.resolve();
   }
 
@@ -285,7 +357,9 @@ class FakeCoopPage implements CoopLeafletPage {
     return Promise.resolve(createVisualTarget());
   }
 
-  openStore(): Promise<void> {
+  openStore(store: CoopMonitoredStore): Promise<void> {
+    this.actions.push('open-store');
+    this.currentStoreSlug = store.storeSlug;
     return Promise.resolve();
   }
 
