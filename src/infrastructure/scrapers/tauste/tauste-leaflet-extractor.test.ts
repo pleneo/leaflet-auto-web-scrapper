@@ -139,25 +139,101 @@ describe('TausteLeafletExtractor', () => {
     });
   });
 
-  it('rejects invalid direct extraction input', async () => {
+  it('navigates from the institutional home and captures the offers CTA', async () => {
+    const page = new FakeTausteLeafletPage([
+      createPublication('tauste:ofertas-tauste-bauru', 'Ofertas Tauste Bauru'),
+    ]);
+    const captureService = new FakeCaptureService();
+    const extractor = new TausteLeafletExtractor(
+      new FakePageFactory(page),
+      new FixedClock(),
+      new NullLogger(),
+      captureService,
+    );
+
+    await expect(
+      extractor.extract({
+        ...createInputWithoutVisualDataset(),
+        startUrlMode: 'institutional-home',
+        institutionalHomeUrl: 'https://institucional.tauste.com.br/',
+        institutionalOffersUrl: 'https://institucional.tauste.com.br/ofertas',
+        visualDataset: {
+          runId: 'run-1',
+          split: 'unassigned',
+        },
+      }),
+    ).resolves.toMatchObject({
+      units: [
+        {
+          leaflets: [
+            {
+              leafletId: 'tauste:ofertas-tauste-bauru',
+            },
+          ],
+        },
+      ],
+    });
+    expect(page.actions.slice(0, 8)).toEqual([
+      'goto:https://institucional.tauste.com.br/',
+      'wait-home',
+      'wait:1000',
+      'target:hero',
+      'open-hero',
+      'wait-profile',
+      'wait:1000',
+      'target:card:0',
+    ]);
+    expect(captureService.inputs[0]?.subject).toEqual({
+      subjectKind: 'tauste-home-offers-link',
+      href: 'https://institucional.tauste.com.br/ofertas',
+    });
+  });
+
+  it('falls back to the footer offers link when the hero CTA fails', async () => {
+    const page = new FakeTausteLeafletPage([
+      createPublication('tauste:ofertas-tauste-bauru', 'Ofertas Tauste Bauru'),
+    ]);
+    page.failHeroNavigation = true;
+    const captureService = new FakeCaptureService();
+    const extractor = new TausteLeafletExtractor(
+      new FakePageFactory(page),
+      new FixedClock(),
+      new NullLogger(),
+      captureService,
+    );
+
+    await extractor.extract({
+      ...createInputWithoutVisualDataset(),
+      startUrlMode: 'institutional-home',
+      institutionalOffersUrl: 'https://institucional.tauste.com.br/ofertas',
+      visualDataset: {
+        runId: 'run-1',
+        split: 'unassigned',
+      },
+    });
+
+    expect(page.actions.slice(0, 7)).toEqual([
+      'goto:https://institucional.tauste.com.br/',
+      'wait-home',
+      'wait:1000',
+      'target:hero',
+      'open-hero',
+      'target:footer',
+      'open-footer',
+    ]);
+    expect(captureService.inputs[1]?.subject).toEqual({
+      subjectKind: 'tauste-footer-offers-link',
+      href: 'https://institucional.tauste.com.br/ofertas',
+    });
+  });
+
+  it('rejects invalid extraction input', async () => {
     const extractor = new TausteLeafletExtractor(
       new FakePageFactory(new FakeTausteLeafletPage([])),
       new FixedClock(),
       new NullLogger(),
     );
 
-    await expect(
-      extractor.extract({
-        ...createInput(),
-        startUrlMode: 'institutional-home',
-      }),
-    ).resolves.toMatchObject({
-      failedPublications: [
-        {
-          errorMessage: 'Unsupported Tauste startUrlMode in direct extractor: institutional-home',
-        },
-      ],
-    });
     await expect(
       extractor.extract({
         ...createInput(),
@@ -242,6 +318,8 @@ class FakeTausteLeafletPage implements TausteLeafletPage {
 
   pdfUrl = 'https://cdn.example.com/ofertas-tauste-bauru.pdf';
 
+  failHeroNavigation = false;
+
   private readonly publications: readonly TaustePublication[];
 
   constructor(publications: readonly TaustePublication[]) {
@@ -274,6 +352,11 @@ class FakeTausteLeafletPage implements TausteLeafletPage {
 
   openHeroOffersPage(): Promise<void> {
     this.actions.push('open-hero');
+
+    if (this.failHeroNavigation) {
+      return Promise.reject(new Error('Hero navigation failed.'));
+    }
+
     return Promise.resolve();
   }
 

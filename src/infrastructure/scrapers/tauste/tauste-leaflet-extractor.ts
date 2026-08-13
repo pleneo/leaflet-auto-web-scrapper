@@ -19,6 +19,8 @@ import type {
   TausteLeafletVisualTarget,
 } from './tauste-leaflet-page';
 import {
+  TAUSTE_INSTITUTIONAL_HOME_URL,
+  TAUSTE_INSTITUTIONAL_OFFERS_URL,
   TAUSTE_FLIPSNACK_PROFILE_URL,
   TAUSTE_UNIT_ID,
   TAUSTE_UNIT_NAME,
@@ -167,10 +169,9 @@ export class TausteLeafletExtractor {
     page: TausteLeafletPage,
     input: ExtractTausteLeafletsInput,
   ): Promise<void> {
-    if (input.startUrlMode !== 'flipsnack-profile') {
-      throw new TausteLeafletExtractionError(
-        `Unsupported Tauste startUrlMode in direct extractor: ${input.startUrlMode}`,
-      );
+    if (input.startUrlMode === 'institutional-home') {
+      await this.navigateInstitutionalHomeToFlipsnackProfile(page, input);
+      return;
     }
 
     this.logger.info('Tauste FSM state entered.', {
@@ -178,6 +179,39 @@ export class TausteLeafletExtractor {
       sourceUrl: input.profileUrl,
     });
     await page.goto(input.profileUrl);
+    await page.waitForFlipsnackProfilePage();
+    await page.waitForTimeout(input.settleDelayMs);
+  }
+
+  private async navigateInstitutionalHomeToFlipsnackProfile(
+    page: TausteLeafletPage,
+    input: ExtractTausteLeafletsInput,
+  ): Promise<void> {
+    const institutionalHomeUrl = input.institutionalHomeUrl ?? TAUSTE_INSTITUTIONAL_HOME_URL;
+
+    this.logger.info('Tauste FSM state entered.', {
+      stateName: 'ANCHOR_PAGE',
+      sourceUrl: institutionalHomeUrl,
+    });
+    await page.goto(institutionalHomeUrl);
+    await page.waitForInstitutionalHomePage();
+    await page.waitForTimeout(input.settleDelayMs);
+
+    try {
+      await this.captureHeroOffersTarget(page, input);
+      await page.openHeroOffersPage();
+    } catch (error) {
+      this.logger.warn('Tauste hero offers navigation failed; falling back to footer link.', {
+        errorMessage: (error as Error).message,
+      });
+      await this.captureFooterOffersTarget(page, input);
+      await page.openFooterOffersPage();
+    }
+
+    this.logger.info('Tauste FSM state entered.', {
+      stateName: 'LEAFLETS_PAGE',
+      sourceUrl: input.institutionalOffersUrl ?? TAUSTE_INSTITUTIONAL_OFFERS_URL,
+    });
     await page.waitForFlipsnackProfilePage();
     await page.waitForTimeout(input.settleDelayMs);
   }
@@ -246,6 +280,38 @@ export class TausteLeafletExtractor {
     });
   }
 
+  private async captureHeroOffersTarget(
+    page: TausteLeafletPage,
+    input: ExtractTausteLeafletsInput,
+  ): Promise<void> {
+    const visualTarget = await page.getHeroOffersVisualTarget();
+    await this.captureBeforeAction(input, visualTarget, {
+      sampleId: createSampleId(input.visualDataset?.runId ?? 'tauste', 'home-offers-link'),
+      stateName: 'ANCHOR_PAGE',
+      label: 'open_leaflets_page_button',
+      subject: {
+        subjectKind: 'tauste-home-offers-link',
+        href: input.institutionalOffersUrl ?? TAUSTE_INSTITUTIONAL_OFFERS_URL,
+      },
+    });
+  }
+
+  private async captureFooterOffersTarget(
+    page: TausteLeafletPage,
+    input: ExtractTausteLeafletsInput,
+  ): Promise<void> {
+    const visualTarget = await page.getFooterOffersVisualTarget();
+    await this.captureBeforeAction(input, visualTarget, {
+      sampleId: createSampleId(input.visualDataset?.runId ?? 'tauste', 'footer-offers-link'),
+      stateName: 'ANCHOR_PAGE',
+      label: 'open_leaflets_page_button',
+      subject: {
+        subjectKind: 'tauste-footer-offers-link',
+        href: input.institutionalOffersUrl ?? TAUSTE_INSTITUTIONAL_OFFERS_URL,
+      },
+    });
+  }
+
   private async capturePdfDownloadTarget(
     page: { getPdfDownloadVisualTarget(): Promise<TausteLeafletVisualTarget> },
     input: ExtractTausteLeafletsInput,
@@ -300,6 +366,8 @@ export function createDefaultTausteLeafletExtractionInput(
 ): ExtractTausteLeafletsInput {
   return {
     startUrlMode: 'flipsnack-profile',
+    institutionalHomeUrl: TAUSTE_INSTITUTIONAL_HOME_URL,
+    institutionalOffersUrl: TAUSTE_INSTITUTIONAL_OFFERS_URL,
     profileUrl: TAUSTE_FLIPSNACK_PROFILE_URL,
     viewport,
     timeoutMs,
