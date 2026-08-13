@@ -17,6 +17,10 @@ export interface TaustePublicationDiscoveryProvider {
   listPublications(input: TaustePublicationDiscoveryInput): Promise<readonly TaustePublication[]>;
 }
 
+export interface TaustePublicationPageFetcher {
+  fetchHtml(url: string): Promise<string>;
+}
+
 export interface TaustePublicationDiscoveryInput {
   readonly page: number;
   readonly accountId: string;
@@ -74,6 +78,24 @@ export class TausteApiClient implements TaustePublicationDiscoveryProvider {
     }
 
     return parseTausteRelatedPublications(await response.text(), input.profileUrl);
+  }
+
+  async fetchHtml(url: string): Promise<string> {
+    const targetUrl = parseSameOriginUrl(url, TAUSTE_FLIPSNACK_PROFILE_URL, 'url');
+    const response = await this.fetcher(targetUrl, {
+      headers: {
+        Accept: 'text/html,application/xhtml+xml',
+        Referer: TAUSTE_FLIPSNACK_PROFILE_URL,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Tauste Flipsnack page request failed: ${String(response.status)} ${response.statusText}`,
+      );
+    }
+
+    return response.text();
   }
 
   private createRelatedPublicationsUrl(input: TaustePublicationDiscoveryInput): URL {
@@ -245,6 +267,18 @@ function parseBaseUrl(value: string, fieldName: string): string {
   }
 
   return url.toString().replace(/\/+$/, '');
+}
+
+function parseSameOriginUrl(value: string, baseUrl: string, fieldName: string): URL {
+  validateNonBlank(value, fieldName);
+  const base = new URL(baseUrl);
+  const url = new URL(value, base);
+
+  if (url.origin !== base.origin) {
+    throw new Error(`${fieldName} must belong to the configured Tauste Flipsnack origin.`);
+  }
+
+  return url;
 }
 
 function validateNonBlank(value: string, fieldName: string): void {
