@@ -174,6 +174,25 @@ export interface AngeloniLeafletLinkVisualDatasetSubject {
   readonly leafletTitle: string;
 }
 
+export interface ComboAtacadistaHomeOffersLinkVisualDatasetSubject {
+  readonly subjectKind: 'comboatacadista-home-offers-link';
+}
+
+export interface ComboAtacadistaLeafletCardVisualDatasetSubject {
+  readonly subjectKind: 'comboatacadista-leaflet-card';
+  readonly cardIndex: number;
+  readonly leafletId: string;
+  readonly leafletTitle: string;
+}
+
+export interface ComboAtacadistaLeafletImageVisualDatasetSubject {
+  readonly subjectKind: 'comboatacadista-leaflet-image';
+  readonly leafletId: string;
+  readonly leafletTitle: string;
+  readonly imageIndex: number;
+  readonly imageUrl: string;
+}
+
 export type VisualDatasetSubject =
   | CarnaubaHomeLeafletsLinkVisualDatasetSubject
   | CarnaubaLeafletCardVisualDatasetSubject
@@ -194,7 +213,10 @@ export type VisualDatasetSubject =
   | AtacadaoLeafletCardVisualDatasetSubject
   | AssaiLeafletFlowVisualDatasetSubject
   | AngeloniRegionSelectionVisualDatasetSubject
-  | AngeloniLeafletLinkVisualDatasetSubject;
+  | AngeloniLeafletLinkVisualDatasetSubject
+  | ComboAtacadistaHomeOffersLinkVisualDatasetSubject
+  | ComboAtacadistaLeafletCardVisualDatasetSubject
+  | ComboAtacadistaLeafletImageVisualDatasetSubject;
 
 export interface VisualDatasetSample {
   readonly sampleId: string;

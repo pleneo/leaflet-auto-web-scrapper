@@ -50,6 +50,12 @@ import { MercadappCarnaubaApiClient } from '../scrapers/carnauba/mercadapp-api-c
 import { PlaywrightCarnaubaLeafletPageFactory } from '../scrapers/carnauba/playwright-carnauba-leaflet-page.factory';
 import { PlaywrightMercadappAuthTokenProvider } from '../scrapers/carnauba/playwright-mercadapp-auth-token-provider';
 import { StoreSnapshotCache } from '../scrapers/carnauba/store-snapshot-cache';
+import { ComboAtacadistaApiClient } from '../scrapers/comboatacadista/combo-atacadista-api-client';
+import { ComboAtacadistaApiExtractionService } from '../scrapers/comboatacadista/combo-atacadista-api-extraction';
+import { ComboAtacadistaApiStrategyAdapter } from '../scrapers/comboatacadista/combo-atacadista-api-strategy-adapter';
+import { ComboAtacadistaLeafletExtractor } from '../scrapers/comboatacadista/combo-atacadista-leaflet-extractor';
+import { ComboAtacadistaPlaywrightStrategyAdapter } from '../scrapers/comboatacadista/combo-atacadista-playwright-strategy-adapter';
+import { PlaywrightComboAtacadistaLeafletPageFactory } from '../scrapers/comboatacadista/playwright-combo-atacadista-leaflet-page.factory';
 import { MixMateusApiClient } from '../scrapers/mixmateus/mixmateus-api-client';
 import { MixMateusApiExtractionService } from '../scrapers/mixmateus/mixmateus-api-extraction';
 import { MixMateusApiStrategyAdapter } from '../scrapers/mixmateus/mixmateus-api-strategy-adapter';
@@ -79,6 +85,7 @@ import {
   parseAssaiPlaywrightCommandOptions,
 } from './assai-playwright-command-options';
 import { parseCarnaubaPlaywrightCommandOptions } from './carnauba-playwright-command-options';
+import { parseComboAtacadistaCommandOptions } from './combo-atacadista-command-options';
 import {
   filterExtractionWorkerCommandArguments,
   parseExtractionWorkerCommandOptions,
@@ -105,6 +112,7 @@ async function run(): Promise<void> {
   const mixMateusOptions = parseMixMateusPlaywrightCommandOptions(scraperArgs, process.env);
   const atacadaoOptions = parseAtacadaoPlaywrightCommandOptions(scraperArgs, process.env);
   const assaiOptions = parseAssaiPlaywrightCommandOptions(scraperArgs, process.env);
+  const comboAtacadistaOptions = parseComboAtacadistaCommandOptions(scraperArgs, process.env);
   const logger = createLogger(process.env);
   const clock = new SystemClock();
   const visualDatasetRootDirectory = resolve(
@@ -127,6 +135,19 @@ async function run(): Promise<void> {
     createAngeloniStrategy(visualDatasetRootDirectory, clock, logger),
   );
   const angeloniApiStrategy = createAngeloniApiStrategy(clock, logger);
+  const comboAtacadistaPlaywrightStrategy = createPlaywrightExtractionStrategy(
+    createComboAtacadistaStrategy(
+      comboAtacadistaOptions,
+      visualDatasetRootDirectory,
+      clock,
+      logger,
+    ),
+  );
+  const comboAtacadistaApiStrategy = createComboAtacadistaApiStrategy(
+    comboAtacadistaOptions,
+    clock,
+    logger,
+  );
   const extractionStrategies: ExtractionStrategy[] = [
     carnaubaPlaywrightStrategy,
     carnaubaApiStrategy,
@@ -157,6 +178,12 @@ async function run(): Promise<void> {
     new HybridExtractionStrategy('angeloni', {
       apiStrategy: angeloniApiStrategy,
       playwrightStrategy: angeloniPlaywrightStrategy,
+    }),
+    comboAtacadistaPlaywrightStrategy,
+    comboAtacadistaApiStrategy,
+    new HybridExtractionStrategy('comboatacadista', {
+      apiStrategy: comboAtacadistaApiStrategy,
+      playwrightStrategy: comboAtacadistaPlaywrightStrategy,
     }),
   ];
   const runner = new ScheduledExtractionRunner(
@@ -218,6 +245,15 @@ async function run(): Promise<void> {
           supermarketId: 'angeloni',
           supermarketName: 'Angeloni Supermercados',
           mode: resolveWorkerTargetMode(workerOptions.extractionMode, 'angeloni'),
+          enabled: true,
+          intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
+          maxAttempts: 1,
+        }),
+        createExtractionTarget({
+          targetId: 'comboatacadista',
+          supermarketId: 'comboatacadista',
+          supermarketName: 'Combo Atacadista',
+          mode: resolveWorkerTargetMode(workerOptions.extractionMode, 'comboatacadista'),
           enabled: true,
           intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
           maxAttempts: 1,
@@ -685,6 +721,74 @@ function createAngeloniApiStrategy(clock: SystemClock, logger: Logger): Angeloni
   );
 }
 
+function createComboAtacadistaStrategy(
+  options: ReturnType<typeof parseComboAtacadistaCommandOptions>,
+  visualDatasetRootDirectory: string,
+  clock: SystemClock,
+  logger: Logger,
+): ComboAtacadistaPlaywrightStrategyAdapter {
+  const visualDatasetCaptureService =
+    options.visualDatasetEnabled && visualDatasetRootDirectory.trim().length > 0
+      ? new VisualDatasetCaptureService(
+          new FileSystemVisualDatasetSampleRepository({
+            rootDirectory: visualDatasetRootDirectory,
+          }),
+          clock,
+        )
+      : undefined;
+  const extractionService = new ComboAtacadistaLeafletExtractor(
+    new PlaywrightComboAtacadistaLeafletPageFactory(),
+    clock,
+    logger,
+    visualDatasetCaptureService,
+  );
+
+  return new ComboAtacadistaPlaywrightStrategyAdapter(
+    {
+      extractionInput: {
+        homeUrl: options.homeUrl,
+        offersUrl: options.offersUrl,
+        startUrlMode: options.startUrlMode,
+        viewport: options.viewport,
+        timeoutMs: options.timeoutMs,
+        settleDelayMs: options.settleDelayMs,
+      },
+      outputRootDirectory: resolve(process.cwd(), options.outputRootDirectory),
+      visualDatasetRootDirectory,
+      visualDatasetSplit: options.visualDatasetSplit,
+    },
+    {
+      extractionService,
+      storage: new LocalSharedImageGalleryStorage(new FetchLeafletImageHttpClient()),
+      countVisualDatasetSamples,
+    },
+  );
+}
+
+function createComboAtacadistaApiStrategy(
+  options: ReturnType<typeof parseComboAtacadistaCommandOptions>,
+  clock: SystemClock,
+  logger: Logger,
+): ComboAtacadistaApiStrategyAdapter {
+  const apiClient = new ComboAtacadistaApiClient({
+    baseUrl: options.homeUrl,
+  });
+  const extractionService = new ComboAtacadistaApiExtractionService(apiClient, clock, logger);
+
+  return new ComboAtacadistaApiStrategyAdapter(
+    {
+      extractionInput: {
+        offersUrl: options.offersUrl,
+      },
+      outputRootDirectory: resolve(process.cwd(), options.outputRootDirectory),
+    },
+    {
+      extractionService,
+      storage: new LocalSharedImageGalleryStorage(new FetchLeafletImageHttpClient()),
+    },
+  );
+}
+
 async function runCycle(runner: ScheduledExtractionRunner, shutdown: ShutdownState): Promise<void> {
   shutdown.activeCycle = runner.runCycle().then(() => undefined);
   await shutdown.activeCycle.finally(() => {
@@ -751,7 +855,8 @@ function supportsApiExtraction(supermarketId: SupermarketId): boolean {
     supermarketId === 'carnauba' ||
     supermarketId === 'superdopovo' ||
     supermarketId === 'mixmateus' ||
-    supermarketId === 'angeloni'
+    supermarketId === 'angeloni' ||
+    supermarketId === 'comboatacadista'
   );
 }
 
