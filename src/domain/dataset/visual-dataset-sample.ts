@@ -223,6 +223,33 @@ export interface CoopLeafletImageVisualDatasetSubject {
   readonly imageUrl: string;
 }
 
+export interface TausteHomeOffersLinkVisualDatasetSubject {
+  readonly subjectKind: 'tauste-home-offers-link';
+  readonly href: string;
+}
+
+export interface TausteFooterOffersLinkVisualDatasetSubject {
+  readonly subjectKind: 'tauste-footer-offers-link';
+  readonly href: string;
+}
+
+export interface TaustePublicationCardVisualDatasetSubject {
+  readonly subjectKind: 'tauste-publication-card';
+  readonly publicationId: string;
+  readonly publicationTitle: string;
+  readonly publicationUrl: string;
+  readonly publishedAtIso: string | null;
+  readonly coverImageUrl: string | null;
+}
+
+export interface TaustePdfDownloadVisualDatasetSubject {
+  readonly subjectKind: 'tauste-pdf-download';
+  readonly publicationId: string;
+  readonly publicationTitle: string;
+  readonly publicationUrl: string;
+  readonly pdfUrl: string | null;
+}
+
 export type VisualDatasetSubject =
   | CarnaubaHomeLeafletsLinkVisualDatasetSubject
   | CarnaubaLeafletCardVisualDatasetSubject
@@ -250,7 +277,11 @@ export type VisualDatasetSubject =
   | CoopHomeOffersLinkVisualDatasetSubject
   | CoopStoreLinkVisualDatasetSubject
   | CoopLeafletCardVisualDatasetSubject
-  | CoopLeafletImageVisualDatasetSubject;
+  | CoopLeafletImageVisualDatasetSubject
+  | TausteHomeOffersLinkVisualDatasetSubject
+  | TausteFooterOffersLinkVisualDatasetSubject
+  | TaustePublicationCardVisualDatasetSubject
+  | TaustePdfDownloadVisualDatasetSubject;
 
 export interface VisualDatasetSample {
   readonly sampleId: string;
