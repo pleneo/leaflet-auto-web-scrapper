@@ -56,6 +56,17 @@ import { ComboAtacadistaApiStrategyAdapter } from '../scrapers/comboatacadista/c
 import { ComboAtacadistaLeafletExtractor } from '../scrapers/comboatacadista/combo-atacadista-leaflet-extractor';
 import { ComboAtacadistaPlaywrightStrategyAdapter } from '../scrapers/comboatacadista/combo-atacadista-playwright-strategy-adapter';
 import { PlaywrightComboAtacadistaLeafletPageFactory } from '../scrapers/comboatacadista/playwright-combo-atacadista-leaflet-page.factory';
+import { CoopApiClient } from '../scrapers/coop/coop-api-client';
+import { CoopApiExtractionService } from '../scrapers/coop/coop-api-extraction';
+import { CoopApiStrategyAdapter } from '../scrapers/coop/coop-api-strategy-adapter';
+import { CoopHybridStrategy } from '../scrapers/coop/coop-hybrid-strategy';
+import {
+  CoopLeafletExtractor,
+  type CoopStartUrlMode,
+} from '../scrapers/coop/coop-leaflet-extractor';
+import { CoopPlaywrightStrategyAdapter } from '../scrapers/coop/coop-playwright-strategy-adapter';
+import { listCoopMonitoredStores } from '../scrapers/coop/coop-targets';
+import { PlaywrightCoopLeafletPageFactory } from '../scrapers/coop/playwright-coop-leaflet-page.factory';
 import { MixMateusApiClient } from '../scrapers/mixmateus/mixmateus-api-client';
 import { MixMateusApiExtractionService } from '../scrapers/mixmateus/mixmateus-api-extraction';
 import { MixMateusApiStrategyAdapter } from '../scrapers/mixmateus/mixmateus-api-strategy-adapter';
@@ -86,6 +97,7 @@ import {
 } from './assai-playwright-command-options';
 import { parseCarnaubaPlaywrightCommandOptions } from './carnauba-playwright-command-options';
 import { parseComboAtacadistaCommandOptions } from './combo-atacadista-command-options';
+import { parseCoopCommandOptions } from './coop-command-options';
 import {
   filterExtractionWorkerCommandArguments,
   parseExtractionWorkerCommandOptions,
@@ -113,11 +125,16 @@ async function run(): Promise<void> {
   const atacadaoOptions = parseAtacadaoPlaywrightCommandOptions(scraperArgs, process.env);
   const assaiOptions = parseAssaiPlaywrightCommandOptions(scraperArgs, process.env);
   const comboAtacadistaOptions = parseComboAtacadistaCommandOptions(scraperArgs, process.env);
+  const coopOptions = parseCoopCommandOptions(scraperArgs, process.env);
   const logger = createLogger(process.env);
   const clock = new SystemClock();
   const visualDatasetRootDirectory = resolve(
     process.cwd(),
     carnaubaOptions.visualDatasetRootDirectory,
+  );
+  const coopVisualDatasetRootDirectory = resolve(
+    process.cwd(),
+    coopOptions.visualDatasetRootDirectory,
   );
   const carnaubaPlaywrightStrategy = createPlaywrightExtractionStrategy(
     createCarnaubaStrategy(carnaubaOptions, visualDatasetRootDirectory, clock, logger),
@@ -148,6 +165,25 @@ async function run(): Promise<void> {
     clock,
     logger,
   );
+  const coopPlaywrightStrategy = createPlaywrightExtractionStrategy(
+    createCoopStrategy(
+      coopOptions,
+      coopOptions.startUrlMode,
+      coopVisualDatasetRootDirectory,
+      clock,
+      logger,
+    ),
+  );
+  const coopApiStrategy = createCoopApiStrategy(coopOptions, clock, logger);
+  const coopHybridStrategy = new CoopHybridStrategy({
+    apiStrategy: coopApiStrategy,
+    directPlaywrightStrategy: createPlaywrightExtractionStrategy(
+      createCoopStrategy(coopOptions, 'store-page', coopVisualDatasetRootDirectory, clock, logger),
+    ),
+    homePlaywrightStrategy: createPlaywrightExtractionStrategy(
+      createCoopStrategy(coopOptions, 'home', coopVisualDatasetRootDirectory, clock, logger),
+    ),
+  });
   const extractionStrategies: ExtractionStrategy[] = [
     carnaubaPlaywrightStrategy,
     carnaubaApiStrategy,
@@ -185,6 +221,9 @@ async function run(): Promise<void> {
       apiStrategy: comboAtacadistaApiStrategy,
       playwrightStrategy: comboAtacadistaPlaywrightStrategy,
     }),
+    coopPlaywrightStrategy,
+    coopApiStrategy,
+    coopHybridStrategy,
   ];
   const runner = new ScheduledExtractionRunner(
     {
@@ -254,6 +293,15 @@ async function run(): Promise<void> {
           supermarketId: 'comboatacadista',
           supermarketName: 'Combo Atacadista',
           mode: resolveWorkerTargetMode(workerOptions.extractionMode, 'comboatacadista'),
+          enabled: true,
+          intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
+          maxAttempts: 1,
+        }),
+        createExtractionTarget({
+          targetId: 'coop',
+          supermarketId: 'coop',
+          supermarketName: 'Coop Supermercados',
+          mode: resolveWorkerTargetMode(workerOptions.extractionMode, 'coop'),
           enabled: true,
           intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
           maxAttempts: 1,
@@ -789,6 +837,77 @@ function createComboAtacadistaApiStrategy(
   );
 }
 
+function createCoopStrategy(
+  options: ReturnType<typeof parseCoopCommandOptions>,
+  startUrlMode: CoopStartUrlMode,
+  visualDatasetRootDirectory: string,
+  clock: SystemClock,
+  logger: Logger,
+): CoopPlaywrightStrategyAdapter {
+  const visualDatasetCaptureService =
+    options.visualDatasetEnabled && visualDatasetRootDirectory.trim().length > 0
+      ? new VisualDatasetCaptureService(
+          new FileSystemVisualDatasetSampleRepository({
+            rootDirectory: visualDatasetRootDirectory,
+          }),
+          clock,
+        )
+      : undefined;
+  const extractionService = new CoopLeafletExtractor(
+    new PlaywrightCoopLeafletPageFactory(),
+    clock,
+    logger,
+    visualDatasetCaptureService,
+  );
+
+  return new CoopPlaywrightStrategyAdapter(
+    {
+      extractionInput: {
+        startUrlMode,
+        homeUrl: options.homeUrl,
+        offersUrl: options.offersUrl,
+        monitoredStores: listCoopMonitoredStores(),
+        viewport: options.viewport,
+        timeoutMs: options.timeoutMs,
+        settleDelayMs: options.settleDelayMs,
+      },
+      outputRootDirectory: resolve(process.cwd(), options.outputRootDirectory),
+      visualDatasetRootDirectory,
+      visualDatasetSplit: options.visualDatasetSplit,
+    },
+    {
+      extractionService,
+      storage: new LocalSharedImageGalleryStorage(new FetchLeafletImageHttpClient()),
+      countVisualDatasetSamples,
+    },
+  );
+}
+
+function createCoopApiStrategy(
+  options: ReturnType<typeof parseCoopCommandOptions>,
+  clock: SystemClock,
+  logger: Logger,
+): CoopApiStrategyAdapter {
+  const apiClient = new CoopApiClient({
+    baseUrl: options.homeUrl,
+  });
+  const extractionService = new CoopApiExtractionService(apiClient, clock, logger);
+
+  return new CoopApiStrategyAdapter(
+    {
+      extractionInput: {
+        offersUrl: options.offersUrl,
+        monitoredStores: listCoopMonitoredStores(),
+      },
+      outputRootDirectory: resolve(process.cwd(), options.outputRootDirectory),
+    },
+    {
+      extractionService,
+      storage: new LocalSharedImageGalleryStorage(new FetchLeafletImageHttpClient()),
+    },
+  );
+}
+
 async function runCycle(runner: ScheduledExtractionRunner, shutdown: ShutdownState): Promise<void> {
   shutdown.activeCycle = runner.runCycle().then(() => undefined);
   await shutdown.activeCycle.finally(() => {
@@ -856,7 +975,8 @@ function supportsApiExtraction(supermarketId: SupermarketId): boolean {
     supermarketId === 'superdopovo' ||
     supermarketId === 'mixmateus' ||
     supermarketId === 'angeloni' ||
-    supermarketId === 'comboatacadista'
+    supermarketId === 'comboatacadista' ||
+    supermarketId === 'coop'
   );
 }
 

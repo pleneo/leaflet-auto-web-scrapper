@@ -193,6 +193,36 @@ export interface ComboAtacadistaLeafletImageVisualDatasetSubject {
   readonly imageUrl: string;
 }
 
+export interface CoopHomeOffersLinkVisualDatasetSubject {
+  readonly subjectKind: 'coop-home-offers-link';
+}
+
+export interface CoopStoreLinkVisualDatasetSubject {
+  readonly subjectKind: 'coop-store-link';
+  readonly storeSlug: string;
+  readonly storeName: string;
+  readonly storeUrl: string;
+}
+
+export interface CoopLeafletCardVisualDatasetSubject {
+  readonly subjectKind: 'coop-leaflet-card';
+  readonly storeSlug: string;
+  readonly storeName: string;
+  readonly cardIndex: number;
+  readonly leafletId: string;
+  readonly leafletTitle: string;
+}
+
+export interface CoopLeafletImageVisualDatasetSubject {
+  readonly subjectKind: 'coop-leaflet-image';
+  readonly storeSlug: string;
+  readonly storeName: string;
+  readonly leafletId: string;
+  readonly leafletTitle: string;
+  readonly imageIndex: number;
+  readonly imageUrl: string;
+}
+
 export type VisualDatasetSubject =
   | CarnaubaHomeLeafletsLinkVisualDatasetSubject
   | CarnaubaLeafletCardVisualDatasetSubject
@@ -216,7 +246,11 @@ export type VisualDatasetSubject =
   | AngeloniLeafletLinkVisualDatasetSubject
   | ComboAtacadistaHomeOffersLinkVisualDatasetSubject
   | ComboAtacadistaLeafletCardVisualDatasetSubject
-  | ComboAtacadistaLeafletImageVisualDatasetSubject;
+  | ComboAtacadistaLeafletImageVisualDatasetSubject
+  | CoopHomeOffersLinkVisualDatasetSubject
+  | CoopStoreLinkVisualDatasetSubject
+  | CoopLeafletCardVisualDatasetSubject
+  | CoopLeafletImageVisualDatasetSubject;
 
 export interface VisualDatasetSample {
   readonly sampleId: string;
