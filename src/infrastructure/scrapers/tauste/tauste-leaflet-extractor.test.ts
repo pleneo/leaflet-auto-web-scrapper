@@ -7,10 +7,10 @@ import type { TaustePublication } from './tauste-pdf-leaflet';
 import {
   TausteLeafletExtractionError,
   TausteLeafletExtractor,
+  createDefaultTausteLeafletExtractionInput,
   type ExtractTausteLeafletsInput,
 } from './tauste-leaflet-extractor';
 import type {
-  OpenTausteLeafletPageInput,
   TausteLeafletPage,
   TausteLeafletPageFactory,
   TausteLeafletVisualTarget,
@@ -115,6 +115,30 @@ describe('TausteLeafletExtractor', () => {
     });
   });
 
+  it('extracts direct PDF leaflets without visual dataset configuration', async () => {
+    const page = new FakeTausteLeafletPage([
+      createPublication('tauste:ofertas-tauste-bauru', 'Ofertas Tauste Bauru'),
+    ]);
+    const extractor = new TausteLeafletExtractor(
+      new FakePageFactory(page),
+      new FixedClock(),
+      new NullLogger(),
+    );
+
+    await expect(extractor.extract(createInputWithoutVisualDataset())).resolves.toMatchObject({
+      units: [
+        {
+          leaflets: [
+            {
+              pdfUrl: 'https://cdn.example.com/ofertas-tauste-bauru.pdf',
+            },
+          ],
+        },
+      ],
+      failedPublications: [],
+    });
+  });
+
   it('rejects invalid direct extraction input', async () => {
     const extractor = new TausteLeafletExtractor(
       new FakePageFactory(new FakeTausteLeafletPage([])),
@@ -146,6 +170,21 @@ describe('TausteLeafletExtractor', () => {
         timeoutMs: 0,
       }),
     ).rejects.toThrow('timeoutMs must be positive.');
+  });
+
+  it('creates default direct extraction input', () => {
+    expect(
+      createDefaultTausteLeafletExtractionInput(
+        createVisualViewport({ width: 1366, height: 768, deviceScaleFactor: 1 }),
+        30_000,
+        1_000,
+      ),
+    ).toMatchObject({
+      startUrlMode: 'flipsnack-profile',
+      profileUrl: 'https://www.flipsnack.com/taustesupermercado/',
+      timeoutMs: 30_000,
+      settleDelayMs: 1_000,
+    });
   });
 });
 
@@ -193,7 +232,7 @@ class FakePageFactory implements TausteLeafletPageFactory {
     this.page = page;
   }
 
-  openPage(_input: OpenTausteLeafletPageInput): Promise<TausteLeafletPage> {
+  openPage(): Promise<TausteLeafletPage> {
     return Promise.resolve(this.page);
   }
 }
@@ -390,11 +429,21 @@ class FixedClock implements Clock {
 }
 
 class NullLogger implements Logger {
-  debug(_message: string, _context?: Readonly<Record<string, string | number | boolean>>): void {}
+  private callCount = 0;
 
-  info(_message: string, _context?: Readonly<Record<string, string | number | boolean>>): void {}
+  debug(): void {
+    this.callCount += 1;
+  }
 
-  warn(_message: string, _context?: Readonly<Record<string, string | number | boolean>>): void {}
+  info(): void {
+    this.callCount += 1;
+  }
 
-  error(_message: string, _context?: Readonly<Record<string, string | number | boolean>>): void {}
+  warn(): void {
+    this.callCount += 1;
+  }
+
+  error(): void {
+    this.callCount += 1;
+  }
 }

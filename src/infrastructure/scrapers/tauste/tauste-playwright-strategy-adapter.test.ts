@@ -75,6 +75,31 @@ describe('TaustePlaywrightStrategyAdapter', () => {
     expect(failed.status).toBe('failed');
     expect(failed.units[0]?.unitId).toBe('tauste:ofertas-tauste-marilia');
   });
+
+  it('keeps stored units with no leaflets as empty outputs', async () => {
+    const output = await createAdapter(
+      new FakePlaywrightExtractionService({
+        ...createExtractionResult(),
+        failedPublications: [],
+      }),
+      new FakePdfStorage({
+        ...createStoredExtraction(),
+        units: [createEmptyStoredUnit()],
+      }),
+      () => Promise.resolve(0),
+    ).execute(createInput('disabled'));
+
+    expect(output.units).toEqual([
+      {
+        unitId: 'tauste-supermercados',
+        unitName: 'Tauste Supermercados',
+        status: 'empty',
+        sourceUrl: 'https://www.flipsnack.com/taustesupermercado/',
+        leaflets: [],
+        errorMessage: null,
+      },
+    ]);
+  });
 });
 
 function createAdapter(
@@ -205,6 +230,18 @@ function createStoredExtraction(): StoredSharedPdfLeafletExtraction {
   };
 }
 
+function createEmptyStoredUnit(): StoredSharedPdfLeafletExtraction['units'][number] {
+  return {
+    unitId: 'tauste-supermercados',
+    unitName: 'Tauste Supermercados',
+    sourceUrl: 'https://www.flipsnack.com/taustesupermercado/',
+    directoryPath: '.data/unit',
+    metadataPath: '.data/unit/metadata.json',
+    leafletsDirectoryPath: '.data/unit/leaflets',
+    leaflets: [],
+  };
+}
+
 class FakePlaywrightExtractionService implements TaustePlaywrightExtractionPort {
   readonly inputs: ExtractTausteLeafletsInput[] = [];
 
@@ -236,11 +273,21 @@ class FakePdfStorage implements TaustePlaywrightStoragePort {
 }
 
 class NullLogger implements Logger {
-  debug(_message: string, _context?: Readonly<Record<string, string | number | boolean>>): void {}
+  private callCount = 0;
 
-  info(_message: string, _context?: Readonly<Record<string, string | number | boolean>>): void {}
+  debug(): void {
+    this.callCount += 1;
+  }
 
-  warn(_message: string, _context?: Readonly<Record<string, string | number | boolean>>): void {}
+  info(): void {
+    this.callCount += 1;
+  }
 
-  error(_message: string, _context?: Readonly<Record<string, string | number | boolean>>): void {}
+  warn(): void {
+    this.callCount += 1;
+  }
+
+  error(): void {
+    this.callCount += 1;
+  }
 }
