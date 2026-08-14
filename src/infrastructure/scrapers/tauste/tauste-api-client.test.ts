@@ -214,6 +214,42 @@ describe('TausteApiClient', () => {
       }),
     ).rejects.toThrow('profileUrl cannot be blank.');
   });
+
+  it('fetches publication HTML from the configured Flipsnack origin', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response('<html>Tauste</html>', {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html',
+        },
+      }),
+    );
+    const client = new TausteApiClient({ fetcher });
+
+    await expect(
+      client.fetchHtml('https://www.flipsnack.com/taustesupermercado/ofertas-tauste-bauru.html'),
+    ).resolves.toBe('<html>Tauste</html>');
+    expect(getFetchUrl(fetcher).pathname).toBe('/taustesupermercado/ofertas-tauste-bauru.html');
+
+    await expect(client.fetchHtml('https://example.com/publication.html')).rejects.toThrow(
+      'url must belong to the configured Tauste Flipsnack origin.',
+    );
+
+    const failedClient = new TausteApiClient({
+      fetcher: vi.fn<typeof fetch>().mockResolvedValue(
+        new Response('', {
+          status: 404,
+          statusText: 'Not Found',
+        }),
+      ),
+    });
+
+    await expect(
+      failedClient.fetchHtml(
+        'https://www.flipsnack.com/taustesupermercado/ofertas-tauste-bauru.html',
+      ),
+    ).rejects.toThrow('Tauste Flipsnack page request failed: 404 Not Found');
+  });
 });
 
 function createRelatedPublicationsFixture(): readonly RelatedPublicationTestResource[] {

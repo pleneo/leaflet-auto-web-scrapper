@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { Clock } from '../../../application/ports/clock';
 import type { Logger } from '../../../application/ports/logger';
 import type {
-  TaustePublicationDiscoveryInput,
   TaustePublicationDiscoveryProvider,
   TaustePublicationPageFetcher,
 } from './tauste-api-client';
@@ -116,6 +115,37 @@ describe('TausteApiExtractionService', () => {
     });
   });
 
+  it('uses discovery cover and publication date when page metadata omits them', async () => {
+    const service = new TausteApiExtractionService(
+      new FakeDiscoveryProvider([
+        createPublication({
+          publicationId: 'tauste:ofertas-tauste-bauru',
+          title: 'Ofertas Tauste Bauru',
+          publicationUrl: 'https://www.flipsnack.com/taustesupermercado/ofertas-tauste-bauru.html',
+        }),
+      ]),
+      new FakePageFetcher({
+        'https://www.flipsnack.com/taustesupermercado/ofertas-tauste-bauru.html':
+          '<html><head><meta property="og:title" content="Ofertas Tauste Bauru"></head><body><a href="https://cdn.example.com/tauste-bauru.pdf">PDF</a></body></html>',
+      }),
+      new FixedClock(),
+      new NullLogger(),
+    );
+
+    await expect(service.extract()).resolves.toMatchObject({
+      units: [
+        {
+          leaflets: [
+            {
+              coverImageUrl: 'https://cdn.example.com/list-cover.jpg',
+              publishedAtIso: '2026-08-11T09:00:03.000Z',
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   it('parses publication metadata and direct PDF candidates from HTML', () => {
     const html = createPublicationHtml({
       title: 'Ofertas Tauste Taubaté',
@@ -145,6 +175,105 @@ describe('TausteApiExtractionService', () => {
     expect(() => parseTaustePublicationPageMetadata('', html)).toThrow(
       'publicationUrl cannot be blank.',
     );
+  });
+
+  it('uses fallback metadata and JSON PDF fields without accepting cover images', () => {
+    const html = `
+      <html>
+        <head>
+          <title>Ofertas <strong>Tauste</strong> Sorocaba &amp; Região</title>
+          <meta name="twitter:image" content="https://cdn.example.com/twitter-cover.jpg">
+          <script>
+            window.accountId = "9D99E5AF8D6";
+            window.flipbookHash = "hash\\'quoted";
+            window.coverImage = "https://cdn.example.com/cover.jpg";
+            window.publicationData = {"downloadUrl":"https:\\/\\/cdn.example.com\\/downloads\\/sorocaba.pdf"};
+          </script>
+          <script type="application/ld+json">
+            {"@type":"DigitalDocument","datePublished":"2026-08-11T09:00:03.000Z"}
+          </script>
+        </head>
+        <body>
+          <iframe id="player-iframe" src="https://player.flipsnack.com/?hash=from-src"></iframe>
+          <a href="https://cdn.example.com/cover.jpg">Cover</a>
+        </body>
+      </html>
+    `;
+
+    expect(
+      parseTaustePublicationPageMetadata(
+        'https://www.flipsnack.com/taustesupermercado/ofertas-tauste-sorocaba.html',
+        html,
+      ),
+    ).toEqual({
+      publicationUrl: 'https://www.flipsnack.com/taustesupermercado/ofertas-tauste-sorocaba.html',
+      title: 'Ofertas Tauste Sorocaba & Região',
+      accountId: '9D99E5AF8D6',
+      flipbookHash: "hash'quoted",
+      playerUrl: 'https://player.flipsnack.com/?hash=from-src',
+      coverImageUrl: 'https://cdn.example.com/twitter-cover.jpg',
+      publishedAtIso: '2026-08-11T09:00:03.000Z',
+    });
+    expect(
+      resolveTaustePublicationPdfUrl(
+        'https://www.flipsnack.com/taustesupermercado/ofertas-tauste-sorocaba.html',
+        html,
+      ),
+    ).toBe('https://cdn.example.com/downloads/sorocaba.pdf');
+  });
+
+  it('returns null for unsupported dates and non-PDF candidates', () => {
+    const html = `
+      <html>
+        <head>
+          <script type="application/ld+json">
+            {"@type":"DigitalDocument","datePublished":"11/08/2026"}
+          </script>
+        </head>
+        <body>
+          <a href="https://cdn.example.com/cover.jpg">Cover</a>
+          <script>{"pdfUrl":"https://cdn.example.com/download"}</script>
+        </body>
+      </html>
+    `;
+
+    expect(
+      parseTaustePublicationPageMetadata(
+        'https://www.flipsnack.com/taustesupermercado/ofertas-tauste.html',
+        html,
+      ),
+    ).toMatchObject({
+      title: 'Tauste publication',
+      publishedAtIso: null,
+      playerUrl: null,
+    });
+    expect(
+      resolveTaustePublicationPdfUrl(
+        'https://www.flipsnack.com/taustesupermercado/ofertas-tauste.html',
+        html,
+      ),
+    ).toBeNull();
+    expect(() =>
+      resolveTaustePublicationPdfUrl(
+        'https://www.flipsnack.com/taustesupermercado/ofertas-tauste.html',
+        ' ',
+      ),
+    ).toThrow('html cannot be blank.');
+  });
+
+  it('returns null metadata when JSON-LD dates are absent', () => {
+    expect(
+      parseTaustePublicationPageMetadata(
+        'https://www.flipsnack.com/taustesupermercado/ofertas-tauste.html',
+        '<html><head><title>Ofertas Tauste</title></head><body></body></html>',
+      ),
+    ).toMatchObject({
+      accountId: null,
+      flipbookHash: null,
+      playerUrl: null,
+      coverImageUrl: null,
+      publishedAtIso: null,
+    });
   });
 });
 
@@ -201,13 +330,13 @@ class FakeDiscoveryProvider implements TaustePublicationDiscoveryProvider {
     this.publications = publications;
   }
 
-  listPublications(_input: TaustePublicationDiscoveryInput): Promise<readonly TaustePublication[]> {
+  listPublications(): Promise<readonly TaustePublication[]> {
     return Promise.resolve(this.publications);
   }
 }
 
 class FailingDiscoveryProvider implements TaustePublicationDiscoveryProvider {
-  listPublications(_input: TaustePublicationDiscoveryInput): Promise<readonly TaustePublication[]> {
+  listPublications(): Promise<readonly TaustePublication[]> {
     return Promise.reject(new Error('Discovery unavailable.'));
   }
 }
@@ -237,11 +366,21 @@ class FixedClock implements Clock {
 }
 
 class NullLogger implements Logger {
-  debug(_message: string, _context?: Readonly<Record<string, string | number | boolean>>): void {}
+  private callCount = 0;
 
-  info(_message: string, _context?: Readonly<Record<string, string | number | boolean>>): void {}
+  debug(): void {
+    this.callCount += 1;
+  }
 
-  warn(_message: string, _context?: Readonly<Record<string, string | number | boolean>>): void {}
+  info(): void {
+    this.callCount += 1;
+  }
 
-  error(_message: string, _context?: Readonly<Record<string, string | number | boolean>>): void {}
+  warn(): void {
+    this.callCount += 1;
+  }
+
+  error(): void {
+    this.callCount += 1;
+  }
 }
