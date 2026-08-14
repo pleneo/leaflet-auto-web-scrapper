@@ -62,6 +62,16 @@ describe('BistekHybridStrategy', () => {
           ),
         }),
     ).toThrow(InvalidBistekHybridStrategyError);
+    expect(
+      () =>
+        new BistekHybridStrategy({
+          apiStrategy: new ForeignStrategy('api'),
+          playwrightStrategy: new FakeStrategy(
+            'playwright',
+            createOutput('playwright', 'succeeded', 1),
+          ),
+        }),
+    ).toThrow('Bistek api strategy must belong to supermarket bistek.');
   });
 });
 
@@ -83,6 +93,20 @@ class FakeStrategy implements ExtractionStrategy {
     this.inputs.push(input);
 
     return Promise.resolve(this.output);
+  }
+}
+
+class ForeignStrategy implements ExtractionStrategy {
+  readonly supermarketId = 'coop';
+
+  readonly mode: 'api' | 'playwright';
+
+  constructor(mode: 'api' | 'playwright') {
+    this.mode = mode;
+  }
+
+  execute(): Promise<ExtractionStrategyOutput> {
+    return Promise.resolve(createOutput('foreign', 'succeeded', 1));
   }
 }
 

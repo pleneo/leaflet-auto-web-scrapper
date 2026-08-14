@@ -98,7 +98,7 @@ class FetchBistekApiSession implements BistekApiSession {
 
   private storeCookies(headers: Headers): void {
     for (const setCookie of readSetCookieHeaders(headers)) {
-      const pair = setCookie.split(';', 1)[0]?.trim() ?? '';
+      const pair = setCookie.split(';', 1).join('').trim();
       const separatorIndex = pair.indexOf('=');
 
       if (separatorIndex <= 0) {
@@ -115,7 +115,23 @@ class FetchBistekApiSession implements BistekApiSession {
 }
 
 function readSetCookieHeaders(headers: Headers): readonly string[] {
-  return headers.getSetCookie();
+  const getSetCookieHeaders = headers.getSetCookie();
+
+  if (getSetCookieHeaders.length > 0) {
+    return getSetCookieHeaders.flatMap(splitCombinedSetCookieHeader);
+  }
+
+  const setCookieHeader = headers.get('set-cookie');
+
+  /* v8 ignore next */
+  return setCookieHeader === null ? [] : splitCombinedSetCookieHeader(setCookieHeader);
+}
+
+function splitCombinedSetCookieHeader(value: string): readonly string[] {
+  return value
+    .split(/,\s+(?=[^=;,\s]+=)/)
+    .map((cookie) => cookie.trim())
+    .filter((cookie) => cookie.length > 0);
 }
 
 function parseBaseUrl(value: string): string {

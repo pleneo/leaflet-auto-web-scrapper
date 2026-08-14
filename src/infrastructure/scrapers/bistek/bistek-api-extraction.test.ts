@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Logger } from '../../../application/ports/logger';
 import type { BistekApiSession, BistekApiSessionFactory } from './bistek-api-client';
-import { BistekApiExtractionService, parseBistekLeafletCards } from './bistek-api-extraction';
+import {
+  BistekApiExtractionService,
+  createBistekApiExtractionInput,
+  parseBistekLeafletCards,
+} from './bistek-api-extraction';
 import type { BistekMonitoredStore } from './bistek-image-gallery-leaflet';
 
 describe('BistekApiExtractionService', () => {
@@ -111,6 +115,26 @@ describe('BistekApiExtractionService', () => {
       'offersUrl cannot be blank.',
     );
   });
+
+  it('records unexpected non-error store failures', async () => {
+    const service = new BistekApiExtractionService(
+      new FixtureBistekSessionFactory({
+        initialHtml: createTargetsHtml(),
+        offersHtmlByStoreId: new Map([['2', createOffersHtml('Blumenau')]]),
+        nonErrorSelectionFailures: new Set(['2']),
+      }),
+      { nowIso: () => '2026-08-14T10:00:00.000Z' },
+      createLogger(),
+    );
+
+    const result = await service.extract({
+      offersUrl: 'https://institucional.bistek.com.br/ofertas',
+      cityIds: [],
+      storeIds: ['2'],
+    });
+
+    expect(result.failedStores[0]?.errorMessage).toBe('Unexpected Bistek API extraction failure.');
+  });
 });
 
 describe('parseBistekLeafletCards', () => {
@@ -131,6 +155,54 @@ describe('parseBistekLeafletCards', () => {
       validityEndDateIso: null,
     });
   });
+
+  it('uses fallback titles and ignores invalid gallery links', () => {
+    const cards = parseBistekLeafletCards(
+      'https://institucional.bistek.com.br/ofertas',
+      createStore(),
+      `
+        <div class="oferta">
+          <a data-fancybox="" href="/image/ignored.jpg"></a>
+          <a data-fancybox="Oferta Especial" href="javascript:void(0)"></a>
+          <a data-fancybox="Oferta Especial" href="http://%"></a>
+          <a data-fancybox="Oferta Especial" href="/image/&#x63;af&#233;.jpg?size=1#fragment" title="Caf&#233; &amp; P&#227;o"></a>
+          <a data-fancybox="Outra" href="/image/other.jpg"></a>
+        </div>
+      `,
+    );
+
+    expect(cards).toEqual([
+      {
+        leafletId: 'bistek-sc-blumenau-loja-no-4-bairro-garcia-2-oferta-especial',
+        title: 'Bistek encarte 1',
+        cardIndex: 0,
+        fancyboxGroup: 'Oferta Especial',
+        coverImageUrl: 'https://institucional.bistek.com.br/image/caf%C3%A9.jpg?size=1',
+        imageUrls: ['https://institucional.bistek.com.br/image/caf%C3%A9.jpg?size=1'],
+        validityStartDateIso: null,
+        validityEndDateIso: null,
+      },
+    ]);
+  });
+
+  it('rejects blank leaflet parsing inputs', () => {
+    expect(createBistekApiExtractionInput()).toEqual({
+      offersUrl: 'https://institucional.bistek.com.br/ofertas',
+      storeIds: [],
+      cityIds: [],
+    });
+    expect(createBistekApiExtractionInput('https://example.com/ofertas')).toEqual({
+      offersUrl: 'https://example.com/ofertas',
+      storeIds: [],
+      cityIds: [],
+    });
+    expect(() => parseBistekLeafletCards(' ', createStore(), '<html></html>')).toThrow(
+      'offersUrl cannot be blank.',
+    );
+    expect(() =>
+      parseBistekLeafletCards('https://institucional.bistek.com.br/ofertas', createStore(), ' '),
+    ).toThrow('html cannot be blank.');
+  });
 });
 
 class FixtureBistekSessionFactory implements BistekApiSessionFactory {
@@ -140,12 +212,16 @@ class FixtureBistekSessionFactory implements BistekApiSessionFactory {
 
   private readonly offersHtmlByStoreId: ReadonlyMap<string, string>;
 
+  private readonly nonErrorSelectionFailures: ReadonlySet<string>;
+
   constructor(input: {
     readonly initialHtml: string;
     readonly offersHtmlByStoreId: ReadonlyMap<string, string>;
+    readonly nonErrorSelectionFailures?: ReadonlySet<string>;
   }) {
     this.initialHtml = input.initialHtml;
     this.offersHtmlByStoreId = input.offersHtmlByStoreId;
+    this.nonErrorSelectionFailures = input.nonErrorSelectionFailures ?? new Set<string>();
   }
 
   createSession(): BistekApiSession {
@@ -158,6 +234,10 @@ class FixtureBistekSessionFactory implements BistekApiSessionFactory {
     }
 
     return this.offersHtmlByStoreId.get(storeId) ?? '<html></html>';
+  }
+
+  shouldFailSelectionWithNonError(storeId: string): boolean {
+    return this.nonErrorSelectionFailures.has(storeId);
   }
 }
 
@@ -175,6 +255,10 @@ class FixtureBistekSession implements BistekApiSession {
   }
 
   selectStore(storeId: string): Promise<void> {
+    if (this.factory.shouldFailSelectionWithNonError(storeId)) {
+      return Promise.reject(new Error('selection failed'));
+    }
+
     this.selectedStoreId = storeId;
     this.factory.selectedStoreIds.push(storeId);
 

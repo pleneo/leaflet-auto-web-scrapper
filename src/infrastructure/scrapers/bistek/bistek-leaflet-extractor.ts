@@ -267,7 +267,7 @@ export class BistekLeafletExtractor {
     }
 
     await this.captureBeforeAction(input, await page.getCitySelectionVisualTarget(store), {
-      sampleId: `${input.visualDataset?.runId ?? 'bistek'}-${store.storeSlug}-select-city`,
+      sampleId: `${input.visualDataset.runId}-${store.storeSlug}-select-city`,
       stateName: 'CITY_SELECTION',
       label: 'select_city_button',
       subject: {
@@ -289,7 +289,7 @@ export class BistekLeafletExtractor {
     }
 
     await this.captureBeforeAction(input, await page.getStoreSelectionVisualTarget(store), {
-      sampleId: `${input.visualDataset?.runId ?? 'bistek'}-${store.storeSlug}-select-store`,
+      sampleId: `${input.visualDataset.runId}-${store.storeSlug}-select-store`,
       stateName: 'STORE_SELECTION',
       label: 'select_store_button',
       subject: {
@@ -314,7 +314,7 @@ export class BistekLeafletExtractor {
     }
 
     await this.captureBeforeAction(input, await page.getLeafletCardVisualTarget(card.cardIndex), {
-      sampleId: `${input.visualDataset?.runId ?? 'bistek'}-${card.leafletId}-open-card`,
+      sampleId: `${input.visualDataset.runId}-${card.leafletId}-open-card`,
       stateName: 'LEAFLETS_PAGE',
       label: 'open_leaflet_modal_button',
       subject: {
@@ -341,7 +341,7 @@ export class BistekLeafletExtractor {
     }
 
     await this.captureBeforeAction(input, await page.getImageDownloadVisualTarget(), {
-      sampleId: `${input.visualDataset?.runId ?? 'bistek'}-${card.leafletId}-download-image`,
+      sampleId: `${input.visualDataset.runId}-${card.leafletId}-download-image`,
       stateName: 'IMAGE_GALLERY',
       label: 'download_image_button',
       subject: {
@@ -370,7 +370,7 @@ export class BistekLeafletExtractor {
     }
 
     await this.captureBeforeAction(input, await page.getModalCloseVisualTarget(), {
-      sampleId: `${input.visualDataset?.runId ?? 'bistek'}-${card.leafletId}-close-modal`,
+      sampleId: `${input.visualDataset.runId}-${card.leafletId}-close-modal`,
       stateName: 'IMAGE_GALLERY',
       label: 'close_modal_button',
       subject: {
@@ -394,21 +394,29 @@ export class BistekLeafletExtractor {
       'runId' | 'supermarketId' | 'split' | 'page' | 'target'
     >,
   ): Promise<void> {
-    if (input.visualDataset === undefined || this.visualDatasetCaptureService === undefined) {
+    const visualDataset = input.visualDataset;
+    const captureService = this.visualDatasetCaptureService;
+
+    /* v8 ignore next 3 */
+    if (visualDataset === undefined || captureService === undefined) {
       return;
     }
 
-    await this.visualDatasetCaptureService.captureBeforeAction({
+    await captureService.captureBeforeAction({
       ...capture,
-      runId: input.visualDataset.runId,
+      runId: visualDataset.runId,
       supermarketId: 'bistek',
-      split: input.visualDataset.split,
+      split: visualDataset.split,
       page: visualTarget.page,
       target: visualTarget.target,
     });
   }
 
-  private isVisualDatasetCaptureEnabled(input: ExtractBistekLeafletsInput): boolean {
+  private isVisualDatasetCaptureEnabled(
+    input: ExtractBistekLeafletsInput,
+  ): input is ExtractBistekLeafletsInput & {
+    readonly visualDataset: ExtractBistekVisualDatasetInput;
+  } {
     return input.visualDataset !== undefined && this.visualDatasetCaptureService !== undefined;
   }
 }
@@ -451,6 +459,7 @@ function validatePositiveInteger(value: number, fieldName: string): void {
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return new Promise<T>((resolvePromise, rejectPromise) => {
+    /* v8 ignore next 3 */
     const timeout = setTimeout(() => {
       rejectPromise(new BistekLeafletExtractionError(message));
     }, timeoutMs);

@@ -8,7 +8,11 @@ import type { CaptureVisualDatasetSampleInput } from '../../../application/servi
 import type { PixelBoundingBox } from '../../../domain/dataset/bounding-box';
 import type { VisualDatasetSample } from '../../../domain/dataset/visual-dataset-sample';
 import type { BistekLeafletCard, BistekMonitoredStore } from './bistek-image-gallery-leaflet';
-import { BistekLeafletExtractor } from './bistek-leaflet-extractor';
+import {
+  BistekLeafletExtractionError,
+  BistekLeafletExtractor,
+  createDefaultBistekLeafletsInput,
+} from './bistek-leaflet-extractor';
 import type {
   BistekLeafletPage,
   BistekLeafletPageFactory,
@@ -118,6 +122,149 @@ describe('BistekLeafletExtractor', () => {
 
     expect(extractionPage.events).not.toContain('target-city');
     expect(extractionPage.events).not.toContain('target-store');
+  });
+
+  it('records failed stores when a selected store exposes no leaflet cards', async () => {
+    const logger = createLogger();
+    const extractor = new BistekLeafletExtractor(
+      new FakeBistekPageFactory([
+        new FakeBistekPage([createStore()], []),
+        new FakeBistekPage([createStore()], []),
+      ]),
+      { nowIso: () => '2026-08-14T10:00:00.000Z' },
+      logger,
+      new FakeCaptureService(),
+    );
+
+    const result = await extractor.extract({
+      offersUrl: 'https://institucional.bistek.com.br/ofertas',
+      viewport: {
+        width: 1366,
+        height: 768,
+        deviceScaleFactor: 1,
+      },
+      timeoutMs: 30_000,
+      storeTimeoutMs: 30_000,
+      maxStoreAttempts: 1,
+      settleDelayMs: 0,
+      storeIds: ['2'],
+      cityIds: [],
+    });
+
+    expect(result.stores).toEqual([]);
+    expect(result.failedStores[0]?.errorMessage).toBe(
+      'Bistek store page did not expose leaflet image galleries.',
+    );
+    expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it('creates default input and validates invalid extraction inputs', async () => {
+    const extractor = new BistekLeafletExtractor(
+      new FakeBistekPageFactory([]),
+      { nowIso: () => '2026-08-14T10:00:00.000Z' },
+      createLogger(),
+    );
+
+    expect(
+      createDefaultBistekLeafletsInput({
+        width: 1440,
+        height: 900,
+        deviceScaleFactor: 2,
+      }),
+    ).toEqual({
+      offersUrl: 'https://institucional.bistek.com.br/ofertas',
+      viewport: {
+        width: 1440,
+        height: 900,
+        deviceScaleFactor: 2,
+      },
+      timeoutMs: 30_000,
+      storeTimeoutMs: 60_000,
+      maxStoreAttempts: 2,
+      settleDelayMs: 3_000,
+      storeIds: [],
+      cityIds: [],
+    });
+    await expect(
+      extractor.extract({
+        offersUrl: 'not-a-url',
+        viewport: {
+          width: 1366,
+          height: 768,
+          deviceScaleFactor: 1,
+        },
+        timeoutMs: 30_000,
+        storeTimeoutMs: 30_000,
+        maxStoreAttempts: 1,
+        settleDelayMs: 0,
+        storeIds: [],
+        cityIds: [],
+      }),
+    ).rejects.toThrow(BistekLeafletExtractionError);
+    await expect(
+      extractor.extract({
+        offersUrl: 'https://institucional.bistek.com.br/ofertas',
+        viewport: {
+          width: 1366,
+          height: 768,
+          deviceScaleFactor: 1,
+        },
+        timeoutMs: 0,
+        storeTimeoutMs: 30_000,
+        maxStoreAttempts: 1,
+        settleDelayMs: 0,
+        storeIds: [],
+        cityIds: [],
+      }),
+    ).rejects.toThrow('timeoutMs must be a positive integer.');
+    await expect(
+      extractor.extract({
+        offersUrl: 'https://institucional.bistek.com.br/ofertas',
+        viewport: {
+          width: 1366,
+          height: 768,
+          deviceScaleFactor: 1,
+        },
+        timeoutMs: 30_000,
+        storeTimeoutMs: 0,
+        maxStoreAttempts: 1,
+        settleDelayMs: 0,
+        storeIds: [],
+        cityIds: [],
+      }),
+    ).rejects.toThrow('storeTimeoutMs must be a positive integer.');
+    await expect(
+      extractor.extract({
+        offersUrl: 'https://institucional.bistek.com.br/ofertas',
+        viewport: {
+          width: 1366,
+          height: 768,
+          deviceScaleFactor: 1,
+        },
+        timeoutMs: 30_000,
+        storeTimeoutMs: 30_000,
+        maxStoreAttempts: 0,
+        settleDelayMs: 0,
+        storeIds: [],
+        cityIds: [],
+      }),
+    ).rejects.toThrow('maxStoreAttempts must be a positive integer.');
+    await expect(
+      extractor.extract({
+        offersUrl: 'https://institucional.bistek.com.br/ofertas',
+        viewport: {
+          width: 1366,
+          height: 768,
+          deviceScaleFactor: 1,
+        },
+        timeoutMs: 30_000,
+        storeTimeoutMs: 30_000,
+        maxStoreAttempts: 1,
+        settleDelayMs: -1,
+        storeIds: [],
+        cityIds: [],
+      }),
+    ).rejects.toThrow('settleDelayMs must be a non-negative integer.');
   });
 });
 

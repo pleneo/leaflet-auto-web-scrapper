@@ -52,8 +52,38 @@ describe('Bistek targets parser', () => {
       parseBistekCitiesFromHtml('var cidades_list = {"4348":"Blumenau"}; var lojas = [];'),
     ).toThrow(BistekTargetsParseError);
     expect(() =>
+      parseBistekCitiesFromHtml('var cidades_list = {"4348":"SC -   "}; var lojas = [];'),
+    ).toThrow('Bistek city has unsupported display name: SC -   .');
+    expect(() =>
+      parseBistekCitiesFromHtml('var cidades_list = {"4348":123}; var lojas = [];'),
+    ).toThrow('Bistek city 4348 must have a string name.');
+    expect(() => parseBistekCitiesFromHtml('var cidades_list = {}; var lojas = [];')).toThrow(
+      'Bistek cidades_list did not expose selectable cities.',
+    );
+    expect(() => parseBistekCitiesFromHtml('var cidades_list = []; var lojas = [];')).toThrow(
+      'Bistek cidades_list must be an object.',
+    );
+    expect(() => parseBistekStoresFromHtml('var cidades_list = {}; var lojas = {};')).toThrow(
+      'Bistek lojas must be an array.',
+    );
+    expect(() => parseBistekStoresFromHtml('var cidades_list = {}; var lojas = [];')).toThrow(
+      'Bistek lojas did not expose selectable stores.',
+    );
+    expect(() => parseBistekStoresFromHtml('var cidades_list = {}; var lojas = [null];')).toThrow(
+      'Bistek store at index 0 must be an object.',
+    );
+    expect(() =>
       parseBistekStoresFromHtml('var cidades_list = {}; var lojas = [{"cidade":"4348"}];'),
     ).toThrow(BistekTargetsParseError);
+    expect(() =>
+      parseBistekTargetsFromHtml(`
+        var cidades_list = {"4348":"SC - Blumenau"};
+        var lojas = [{"cidade":"9999","id":"2","loja":"Loja","lat":"1","lng":"2"}];
+      `),
+    ).toThrow('Bistek store references unknown city: 9999.');
+    expect(() => parseBistekCitiesFromHtml('var lojas = [];')).toThrow(
+      'Bistek page did not expose cidades_list.',
+    );
     expect(() => parseBistekTargetsFromHtml('')).toThrow('html cannot be blank.');
   });
 });

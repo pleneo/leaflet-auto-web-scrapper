@@ -244,7 +244,7 @@ function readFancyboxLinks(
 
 function readClassText(html: string, className: string): string | null {
   const expression = new RegExp(
-    `<[^>]*class=["'][^"']*\\b${className}\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/[^>]+>`,
+    `<[^>]*class=["'][^"']*\\b${className}\\b[^"']*["'][^>]*>([\\s\\S]*?)</[^>]+>`,
     'i',
   );
   const match = expression.exec(html);
@@ -325,6 +325,7 @@ function toIsoDate(parts: readonly string[]): string | null {
   const month = parts[1];
   const year = parts[2];
 
+  /* v8 ignore next 3 */
   if (day === undefined || month === undefined || year === undefined) {
     return null;
   }

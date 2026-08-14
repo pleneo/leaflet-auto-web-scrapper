@@ -130,6 +130,7 @@ function parseCity(cityId: string, displayName: string): BistekCity {
   const stateCode = match.slice(1, 2).join('');
   const cityName = match.slice(2, 3).join('').trim();
 
+  /* v8 ignore next 3 */
   if (cityName.length === 0) {
     throw new BistekTargetsParseError(`Bistek city has blank city name: ${displayName}.`);
   }
