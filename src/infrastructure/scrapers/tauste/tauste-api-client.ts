@@ -36,8 +36,8 @@ export interface TausteFlipsnackRelatedPublication {
   readonly coverImgSrc: string | null;
   readonly hidePublishDate: boolean;
   readonly datePublished: string | null;
-  readonly screenname: string;
-  readonly profileUrl: string;
+  readonly screenname: string | null;
+  readonly profileUrl: string | null;
   readonly name: string;
   readonly directLink: string;
 }
@@ -263,11 +263,15 @@ function readRequiredString(response: JsonObject, fieldName: string, errorMessag
   return value.trim();
 }
 
-function readOptionalString(response: JsonObject, fieldName: string, errorMessage: string): string {
+function readOptionalString(
+  response: JsonObject,
+  fieldName: string,
+  errorMessage: string,
+): string | null {
   const value = response[fieldName];
 
   if (value === undefined || value === null) {
-    return '';
+    return null;
   }
 
   if (typeof value !== 'string') {

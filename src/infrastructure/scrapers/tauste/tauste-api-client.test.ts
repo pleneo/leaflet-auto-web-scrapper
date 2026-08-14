@@ -25,6 +25,10 @@ interface RelatedPublicationTestResource extends JsonObject {
 }
 
 describe('TausteApiClient', () => {
+  it('uses the default fetcher when none is provided', () => {
+    expect(() => new TausteApiClient()).not.toThrow();
+  });
+
   it('fetches and maps Flipsnack related publications', async () => {
     const fetcher = createJsonFetcher(createRelatedPublicationsFixture());
     const client = new TausteApiClient({
@@ -88,8 +92,43 @@ describe('TausteApiClient', () => {
       parseTausteRelatedPublications('{}', 'https://www.flipsnack.com/taustesupermercado/'),
     ).toThrow('Invalid Tauste Flipsnack related publications response.');
     expect(() =>
+      parseTausteRelatedPublications('[false]', 'https://www.flipsnack.com/taustesupermercado/'),
+    ).toThrow('Invalid Tauste Flipsnack related publication.');
+    expect(() =>
       parseTausteRelatedPublications(
         JSON.stringify([{ name: 'Ofertas Tauste Bauru' }]),
+        'https://www.flipsnack.com/taustesupermercado/',
+      ),
+    ).toThrow('Invalid Tauste Flipsnack related publication.');
+    expect(() =>
+      parseTausteRelatedPublications(
+        JSON.stringify([
+          {
+            coverImgSrc: 'https://cdn.example.com/cover.jpg',
+            hidePublishDate: false,
+            datePublished: '2026-08-11 10:00:03',
+            screenname: '',
+            profileUrl: '',
+            name: 123,
+            directLink: 'ofertas-tauste-bauru.html',
+          },
+        ]),
+        'https://www.flipsnack.com/taustesupermercado/',
+      ),
+    ).toThrow('Invalid Tauste Flipsnack related publication.');
+    expect(() =>
+      parseTausteRelatedPublications(
+        JSON.stringify([
+          {
+            coverImgSrc: 123,
+            hidePublishDate: false,
+            datePublished: '2026-08-11 10:00:03',
+            screenname: '',
+            profileUrl: '',
+            name: 'Ofertas Tauste Bauru',
+            directLink: 'ofertas-tauste-bauru.html',
+          },
+        ]),
         'https://www.flipsnack.com/taustesupermercado/',
       ),
     ).toThrow('Invalid Tauste Flipsnack related publication.');
@@ -109,6 +148,31 @@ describe('TausteApiClient', () => {
         'https://www.flipsnack.com/taustesupermercado/',
       ),
     ).toThrow('Invalid Tauste Flipsnack publication date: not-a-date');
+    expect(
+      parseTausteRelatedPublications(
+        JSON.stringify([
+          {
+            coverImgSrc: null,
+            hidePublishDate: false,
+            datePublished: null,
+            screenname: null,
+            profileUrl: null,
+            name: 'Ofertas Tauste Bauru',
+            directLink: 'ofertas-tauste-bauru.html',
+          },
+        ]),
+        'https://www.flipsnack.com/taustesupermercado/',
+      ),
+    ).toEqual([
+      {
+        publicationId: 'tauste:ofertas-tauste-bauru',
+        title: 'Ofertas Tauste Bauru',
+        directLink: 'ofertas-tauste-bauru.html',
+        publicationUrl: 'https://www.flipsnack.com/taustesupermercado/ofertas-tauste-bauru.html',
+        coverImageUrl: null,
+        publishedAtIso: null,
+      },
+    ]);
     expect(() => new TausteApiClient({ apiBaseUrl: 'http://api.flipsnack.com/v2' })).toThrow(
       'apiBaseUrl must use https.',
     );
@@ -131,6 +195,24 @@ describe('TausteApiClient', () => {
         page: 0,
       }),
     ).rejects.toThrow('page must be a positive integer.');
+    await expect(
+      failedClient.listPublications({
+        ...createDefaultTaustePublicationDiscoveryInput(),
+        excludeId: -1,
+      }),
+    ).rejects.toThrow('excludeId must be a non-negative integer.');
+    await expect(
+      failedClient.listPublications({
+        ...createDefaultTaustePublicationDiscoveryInput(),
+        accountId: ' ',
+      }),
+    ).rejects.toThrow('accountId cannot be blank.');
+    await expect(
+      failedClient.listPublications({
+        ...createDefaultTaustePublicationDiscoveryInput(),
+        profileUrl: ' ',
+      }),
+    ).rejects.toThrow('profileUrl cannot be blank.');
   });
 });
 
