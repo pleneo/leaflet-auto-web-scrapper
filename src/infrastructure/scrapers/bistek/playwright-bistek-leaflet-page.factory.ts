@@ -195,13 +195,13 @@ class PlaywrightBistekLeafletPage implements BistekLeafletPage {
     return new URL(href, this.page.url()).toString();
   }
 
-  getModalCloseVisualTarget(): Promise<BistekLeafletVisualTarget> {
-    return Promise.resolve(
-      this.createVisualTarget(this.closeButtonLocator(), 'Bistek Fancybox close button'),
-    );
+  async getModalCloseVisualTarget(): Promise<BistekLeafletVisualTarget> {
+    await this.ensureFancyboxToolbarVisible();
+    return this.createVisualTarget(this.closeButtonLocator(), 'Bistek Fancybox close button');
   }
 
   async closeLeafletModal(): Promise<void> {
+    await this.ensureFancyboxToolbarVisible();
     await this.closeButtonLocator().click({
       timeout: this.timeoutMs,
     });
@@ -245,6 +245,18 @@ class PlaywrightBistekLeafletPage implements BistekLeafletPage {
 
   private downloadButtonLocator(): Locator {
     return this.page.locator('.fancybox-container .fancybox-button--download').first();
+  }
+
+  private async ensureFancyboxToolbarVisible(): Promise<void> {
+    await this.page.mouse.move(500, 500);
+    await this.page
+      .locator('.fancybox-toolbar')
+      .first()
+      .waitFor({
+        state: 'visible',
+        timeout: this.timeoutMs,
+      })
+      .catch(() => undefined);
   }
 
   private closeButtonLocator(): Locator {

@@ -165,7 +165,7 @@ export function parseBistekLeafletCards(
     cards.push({
       leafletId: createLeafletId(store, group, title, imageUrls),
       title,
-      cardIndex: index,
+      cardIndex: cards.length,
       fancyboxGroup: group,
       coverImageUrl,
       imageUrls,
