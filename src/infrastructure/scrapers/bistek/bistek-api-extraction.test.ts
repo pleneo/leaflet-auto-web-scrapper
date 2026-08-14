@@ -256,7 +256,8 @@ class FixtureBistekSession implements BistekApiSession {
 
   selectStore(storeId: string): Promise<void> {
     if (this.factory.shouldFailSelectionWithNonError(storeId)) {
-      return Promise.reject(new Error('selection failed'));
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+      return Promise.reject('selection failed');
     }
 
     this.selectedStoreId = storeId;
