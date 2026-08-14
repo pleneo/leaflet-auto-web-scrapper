@@ -227,6 +227,94 @@ describe('TausteLeafletExtractor', () => {
     });
   });
 
+  it('navigates institutional defaults without visual dataset metadata', async () => {
+    const page = new FakeTausteLeafletPage([
+      createPublication('tauste:ofertas-tauste-bauru', 'Ofertas Tauste Bauru'),
+    ]);
+    const captureService = new FakeCaptureService();
+    const extractor = new TausteLeafletExtractor(
+      new FakePageFactory(page),
+      new FixedClock(),
+      new NullLogger(),
+      captureService,
+    );
+
+    await extractor.extract({
+      ...createInputWithoutVisualDataset(),
+      startUrlMode: 'institutional-home',
+    });
+
+    expect(page.actions.slice(0, 5)).toEqual([
+      'goto:https://institucional.tauste.com.br/',
+      'wait-home',
+      'wait:1000',
+      'target:hero',
+      'open-hero',
+    ]);
+    expect(captureService.inputs).toEqual([]);
+  });
+
+  it('falls back to footer defaults without visual dataset metadata', async () => {
+    const page = new FakeTausteLeafletPage([
+      createPublication('tauste:ofertas-tauste-bauru', 'Ofertas Tauste Bauru'),
+    ]);
+    page.failHeroNavigation = true;
+    const captureService = new FakeCaptureService();
+    const extractor = new TausteLeafletExtractor(
+      new FakePageFactory(page),
+      new FixedClock(),
+      new NullLogger(),
+      captureService,
+    );
+
+    await extractor.extract({
+      ...createInputWithoutVisualDataset(),
+      startUrlMode: 'institutional-home',
+    });
+
+    expect(page.actions.slice(0, 7)).toEqual([
+      'goto:https://institucional.tauste.com.br/',
+      'wait-home',
+      'wait:1000',
+      'target:hero',
+      'open-hero',
+      'target:footer',
+      'open-footer',
+    ]);
+    expect(captureService.inputs).toEqual([]);
+  });
+
+  it('maps profile navigation failures into typed extraction failures', async () => {
+    const page = new FakeTausteLeafletPage([
+      createPublication('tauste:ofertas-tauste-bauru', 'Ofertas Tauste Bauru'),
+    ]);
+    page.failProfileWait = true;
+    const extractor = new TausteLeafletExtractor(
+      new FakePageFactory(page),
+      new FixedClock(),
+      new NullLogger(),
+    );
+
+    await expect(extractor.extract(createInputWithoutVisualDataset())).resolves.toEqual({
+      source: 'tauste-playwright-direct',
+      extractedAtIso: '2026-08-13T10:00:00.000Z',
+      units: [],
+      failedPublications: [
+        {
+          publicationId: 'tauste:flipsnack-profile',
+          title: 'Tauste Flipsnack profile',
+          sourceUrl: 'https://www.flipsnack.com/taustesupermercado/',
+          errorMessage: 'Profile did not load.',
+        },
+      ],
+    });
+    expect(page.actions).toEqual([
+      'goto:https://www.flipsnack.com/taustesupermercado/',
+      'wait-profile',
+      'close-page',
+    ]);
+  });
+
   it('rejects invalid extraction input', async () => {
     const extractor = new TausteLeafletExtractor(
       new FakePageFactory(new FakeTausteLeafletPage([])),
@@ -320,6 +408,8 @@ class FakeTausteLeafletPage implements TausteLeafletPage {
 
   failHeroNavigation = false;
 
+  failProfileWait = false;
+
   private readonly publications: readonly TaustePublication[];
 
   constructor(publications: readonly TaustePublication[]) {
@@ -372,6 +462,11 @@ class FakeTausteLeafletPage implements TausteLeafletPage {
 
   waitForFlipsnackProfilePage(): Promise<void> {
     this.actions.push('wait-profile');
+
+    if (this.failProfileWait) {
+      return Promise.reject(new Error('Profile did not load.'));
+    }
+
     return Promise.resolve();
   }
 
