@@ -116,7 +116,7 @@ class FakeStrategy implements ExtractionStrategy {
     this.output = output;
   }
 
-  execute(_input: ExtractionStrategyInput): Promise<ExtractionStrategyOutput> {
+  execute(): Promise<ExtractionStrategyOutput> {
     this.calls += 1;
     return Promise.resolve(this.output);
   }
@@ -125,13 +125,25 @@ class FakeStrategy implements ExtractionStrategy {
 class MemoryLogger implements Logger {
   readonly warns: readonly { readonly message: string }[] = [];
 
-  debug(_message: string, _context?: Readonly<Record<string, string | number | boolean>>): void {}
+  readonly debugMessages: readonly string[] = [];
 
-  info(_message: string, _context?: Readonly<Record<string, string | number | boolean>>): void {}
+  readonly infoMessages: readonly string[] = [];
 
-  warn(message: string, _context?: Readonly<Record<string, string | number | boolean>>): void {
+  readonly errorMessages: readonly string[] = [];
+
+  debug(message: string): void {
+    (this.debugMessages as string[]).push(message);
+  }
+
+  info(message: string): void {
+    (this.infoMessages as string[]).push(message);
+  }
+
+  warn(message: string): void {
     (this.warns as { readonly message: string }[]).push({ message });
   }
 
-  error(_message: string, _context?: Readonly<Record<string, string | number | boolean>>): void {}
+  error(message: string): void {
+    (this.errorMessages as string[]).push(message);
+  }
 }
