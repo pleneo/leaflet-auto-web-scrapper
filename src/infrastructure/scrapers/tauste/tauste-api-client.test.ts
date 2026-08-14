@@ -25,8 +25,8 @@ interface RelatedPublicationTestResource extends JsonObject {
 }
 
 describe('TausteApiClient', () => {
-  it('uses the default fetcher when none is provided', () => {
-    expect(() => new TausteApiClient()).not.toThrow();
+  it('can be created with the default Fetch implementation', () => {
+    expect(new TausteApiClient()).toBeInstanceOf(TausteApiClient);
   });
 
   it('fetches and maps Flipsnack related publications', async () => {
@@ -69,85 +69,30 @@ describe('TausteApiClient', () => {
     expect(url.searchParams.get('userUrl')).toBe('https://www.flipsnack.com/taustesupermercado/');
   });
 
-  it('filters offer publications without keeping permanent catalogs', () => {
+  it('filters regular city offer publications without keeping specials or permanent catalogs', () => {
     const publications = parseTausteRelatedPublications(
-      JSON.stringify(createRelatedPublicationsFixture()),
+      JSON.stringify([
+        ...createRelatedPublicationsFixture(),
+        {
+          coverImgSrc:
+            'https://d160aj0mj3npgx.cloudfront.net/9D99E5AF8D6/collections/zufbi5p7t9/covers/page/small',
+          hidePublishDate: false,
+          datePublished: '2026-08-11 10:00:03',
+          screenname: '',
+          profileUrl: '',
+          name: 'Ofertas Tauste Bauru',
+          directLink: 'ofertas-tauste-bauru-zufbi5p7t9.html',
+        },
+      ]),
       'https://www.flipsnack.com/taustesupermercado/',
     );
 
     expect(
       filterTausteOfferPublications(publications).map((publication) => publication.title),
-    ).toEqual(['Ofertas Tauste Especial Nestlé']);
+    ).toEqual(['Ofertas Tauste Bauru']);
   });
 
-  it('creates deterministic publication ids from direct links', () => {
-    expect(createTaustePublicationId('ofertas-tauste-marília3.html', 0)).toBe(
-      'tauste:ofertas-tauste-marilia3',
-    );
-    expect(createTaustePublicationId('   ', 2)).toBe('tauste:publication-3');
-  });
-
-  it('rejects invalid responses, inputs, base URLs, and HTTP failures', async () => {
-    expect(() =>
-      parseTausteRelatedPublications('{}', 'https://www.flipsnack.com/taustesupermercado/'),
-    ).toThrow('Invalid Tauste Flipsnack related publications response.');
-    expect(() =>
-      parseTausteRelatedPublications('[false]', 'https://www.flipsnack.com/taustesupermercado/'),
-    ).toThrow('Invalid Tauste Flipsnack related publication.');
-    expect(() =>
-      parseTausteRelatedPublications(
-        JSON.stringify([{ name: 'Ofertas Tauste Bauru' }]),
-        'https://www.flipsnack.com/taustesupermercado/',
-      ),
-    ).toThrow('Invalid Tauste Flipsnack related publication.');
-    expect(() =>
-      parseTausteRelatedPublications(
-        JSON.stringify([
-          {
-            coverImgSrc: 'https://cdn.example.com/cover.jpg',
-            hidePublishDate: false,
-            datePublished: '2026-08-11 10:00:03',
-            screenname: '',
-            profileUrl: '',
-            name: 123,
-            directLink: 'ofertas-tauste-bauru.html',
-          },
-        ]),
-        'https://www.flipsnack.com/taustesupermercado/',
-      ),
-    ).toThrow('Invalid Tauste Flipsnack related publication.');
-    expect(() =>
-      parseTausteRelatedPublications(
-        JSON.stringify([
-          {
-            coverImgSrc: 123,
-            hidePublishDate: false,
-            datePublished: '2026-08-11 10:00:03',
-            screenname: '',
-            profileUrl: '',
-            name: 'Ofertas Tauste Bauru',
-            directLink: 'ofertas-tauste-bauru.html',
-          },
-        ]),
-        'https://www.flipsnack.com/taustesupermercado/',
-      ),
-    ).toThrow('Invalid Tauste Flipsnack related publication.');
-    expect(() =>
-      parseTausteRelatedPublications(
-        JSON.stringify([
-          {
-            coverImgSrc: '',
-            hidePublishDate: false,
-            datePublished: 'not-a-date',
-            screenname: '',
-            profileUrl: '',
-            name: 'Ofertas Tauste Bauru',
-            directLink: 'ofertas-tauste-bauru.html',
-          },
-        ]),
-        'https://www.flipsnack.com/taustesupermercado/',
-      ),
-    ).toThrow('Invalid Tauste Flipsnack publication date: not-a-date');
+  it('keeps nullable publication fields as null or empty strings', () => {
     expect(
       parseTausteRelatedPublications(
         JSON.stringify([
@@ -173,9 +118,118 @@ describe('TausteApiClient', () => {
         publishedAtIso: null,
       },
     ]);
+  });
+
+  it('creates deterministic publication ids from direct links', () => {
+    expect(createTaustePublicationId('ofertas-tauste-marília3.html', 0)).toBe(
+      'tauste:ofertas-tauste-marilia3',
+    );
+    expect(createTaustePublicationId('   ', 2)).toBe('tauste:publication-3');
+  });
+
+  it('rejects invalid responses, inputs, base URLs, and HTTP failures', async () => {
+    expect(() =>
+      parseTausteRelatedPublications(
+        JSON.stringify(['invalid-publication']),
+        'https://www.flipsnack.com/taustesupermercado/',
+      ),
+    ).toThrow('Invalid Tauste Flipsnack related publication.');
+    expect(() =>
+      parseTausteRelatedPublications('{}', 'https://www.flipsnack.com/taustesupermercado/'),
+    ).toThrow('Invalid Tauste Flipsnack related publications response.');
+    expect(() =>
+      parseTausteRelatedPublications('[false]', 'https://www.flipsnack.com/taustesupermercado/'),
+    ).toThrow('Invalid Tauste Flipsnack related publication.');
+    expect(() =>
+      parseTausteRelatedPublications(
+        JSON.stringify([{ name: 'Ofertas Tauste Bauru' }]),
+        'https://www.flipsnack.com/taustesupermercado/',
+      ),
+    ).toThrow('Invalid Tauste Flipsnack related publication.');
+    expect(() =>
+      parseTausteRelatedPublications(
+        JSON.stringify([
+          {
+            coverImgSrc: null,
+            hidePublishDate: false,
+            datePublished: null,
+            screenname: null,
+            profileUrl: null,
+            name: ' ',
+            directLink: 'ofertas-tauste-bauru.html',
+          },
+        ]),
+        'https://www.flipsnack.com/taustesupermercado/',
+      ),
+    ).toThrow('Invalid Tauste Flipsnack related publication.');
+    expect(() =>
+      parseTausteRelatedPublications(
+        JSON.stringify([
+          {
+            coverImgSrc: '',
+            hidePublishDate: false,
+            datePublished: 'not-a-date',
+            screenname: '',
+            profileUrl: '',
+            name: 'Ofertas Tauste Bauru',
+            directLink: 'ofertas-tauste-bauru.html',
+          },
+        ]),
+        'https://www.flipsnack.com/taustesupermercado/',
+      ),
+    ).toThrow('Invalid Tauste Flipsnack publication date: not-a-date');
+    expect(() =>
+      parseTausteRelatedPublications(
+        JSON.stringify([
+          {
+            coverImgSrc: 1,
+            hidePublishDate: false,
+            datePublished: null,
+            screenname: '',
+            profileUrl: '',
+            name: 'Ofertas Tauste Bauru',
+            directLink: 'ofertas-tauste-bauru.html',
+          },
+        ]),
+        'https://www.flipsnack.com/taustesupermercado/',
+      ),
+    ).toThrow('Invalid Tauste Flipsnack related publication.');
+    expect(() =>
+      parseTausteRelatedPublications(
+        JSON.stringify([
+          {
+            coverImgSrc: null,
+            hidePublishDate: 'false',
+            datePublished: null,
+            screenname: null,
+            profileUrl: null,
+            name: 'Ofertas Tauste Bauru',
+            directLink: 'ofertas-tauste-bauru.html',
+          },
+        ]),
+        'https://www.flipsnack.com/taustesupermercado/',
+      ),
+    ).toThrow('Invalid Tauste Flipsnack related publication.');
+    expect(() =>
+      parseTausteRelatedPublications(
+        JSON.stringify([
+          {
+            coverImgSrc: null,
+            hidePublishDate: false,
+            datePublished: null,
+            screenname: null,
+            profileUrl: null,
+            name: 'Ofertas Tauste Bauru',
+            directLink: 'ofertas-tauste-bauru.html',
+          },
+        ]),
+        ' ',
+      ),
+    ).toThrow('profileUrl cannot be blank.');
     expect(() => new TausteApiClient({ apiBaseUrl: 'http://api.flipsnack.com/v2' })).toThrow(
       'apiBaseUrl must use https.',
     );
+    expect(() => new TausteApiClient({ apiBaseUrl: ' ' })).toThrow('apiBaseUrl cannot be blank.');
 
     const failedClient = new TausteApiClient({
       fetcher: vi.fn<typeof fetch>().mockResolvedValue(

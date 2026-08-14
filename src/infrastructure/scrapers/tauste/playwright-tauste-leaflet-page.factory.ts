@@ -1,10 +1,19 @@
-import { chromium, type Browser, type BrowserContext, type Locator, type Page } from 'playwright';
+import {
+  chromium,
+  type Browser,
+  type BrowserContext,
+  type FrameLocator,
+  type Locator,
+  type Page,
+  type Response,
+} from 'playwright';
 import {
   PlaywrightVisualActionTarget,
   PlaywrightVisualDatasetPage,
 } from '../../playwright/playwright-visual-dataset-page';
+import { parseLeafletImageContentType } from '../../storage/fetch-leaflet-image-http-client';
 import { createTaustePublicationId } from './tauste-api-client';
-import type { TaustePublication } from './tauste-pdf-leaflet';
+import type { DownloadedTausteImageGalleryImage, TaustePublication } from './tauste-pdf-leaflet';
 import type {
   OpenTausteLeafletPageInput,
   TausteLeafletPage,
@@ -15,6 +24,13 @@ import type {
 
 const TAUSTE_USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
+
+type JsonPrimitive = string | number | boolean | null;
+type JsonValue = JsonPrimitive | JsonObject | readonly JsonValue[];
+
+interface JsonObject {
+  readonly [key: string]: JsonValue | undefined;
+}
 
 export class PlaywrightTausteLeafletPageFactory implements TausteLeafletPageFactory {
   async openPage(input: OpenTausteLeafletPageInput): Promise<TausteLeafletPage> {
@@ -171,6 +187,7 @@ class PlaywrightTausteLeafletPage implements TausteLeafletPage {
         publicationUrl,
         coverImageUrl,
         publishedAtIso: null,
+        sourceCardIndex: index,
       });
     }
 
@@ -188,16 +205,27 @@ class PlaywrightTausteLeafletPage implements TausteLeafletPage {
 
   async openPublication(cardIndex: number): Promise<TausteOpenedPublicationPage> {
     const card = this.publicationCardLocator().nth(cardIndex);
-    const popupPromise = this.context.waitForEvent('page', {
-      timeout: this.timeoutMs,
-    });
+    const previousUrl = this.page.url();
+    const popupPromise = this.context
+      .waitForEvent('page', {
+        timeout: Math.min(this.timeoutMs, 2_000),
+      })
+      .catch(() => null);
     await card.scrollIntoViewIfNeeded({
       timeout: this.timeoutMs,
     });
-    await card.click({
-      timeout: this.timeoutMs,
-    });
-    const popup = await popupPromise.catch(() => null);
+    await Promise.all([
+      this.page
+        .waitForURL((url) => url.toString() !== previousUrl, {
+          timeout: this.timeoutMs,
+          waitUntil: 'domcontentloaded',
+        })
+        .catch(() => undefined),
+      card.click({
+        timeout: this.timeoutMs,
+      }),
+    ]);
+    const popup = await popupPromise;
     const publicationPage = popup ?? this.page;
     await publicationPage.waitForLoadState('domcontentloaded', {
       timeout: this.timeoutMs,
@@ -206,6 +234,7 @@ class PlaywrightTausteLeafletPage implements TausteLeafletPage {
     return new PlaywrightTausteOpenedPublicationPage(
       publicationPage,
       publicationPage !== this.page,
+      publicationPage === this.page ? previousUrl : null,
       this.timeoutMs,
     );
   }
@@ -243,24 +272,143 @@ class PlaywrightTausteLeafletPage implements TausteLeafletPage {
   }
 }
 
+interface TausteFlipsnackDataJson {
+  readonly pageIds: readonly string[];
+}
+
+export function readTausteFlipsnackPublicationSegment(url: string): string | null {
+  const pathSegments = new URL(url).pathname.split('/').filter((segment) => segment.length > 0);
+  const publicationSegment =
+    pathSegments.at(-1) === 'full-view.html' ? pathSegments.at(-2) : pathSegments.at(-1);
+
+  if (publicationSegment === undefined || publicationSegment.length === 0) {
+    return null;
+  }
+
+  return publicationSegment.replace(/\.html$/i, '');
+}
+
+function isFlipsnackDataJsonUrl(url: string, expectedPublicationSegment: string | null): boolean {
+  if (!/\/collections\/[^/]+\/data\.json(?:\?|$)/i.test(url)) {
+    return false;
+  }
+
+  if (expectedPublicationSegment === null) {
+    return true;
+  }
+
+  const match = /\/collections\/([^/]+)\/data\.json(?:\?|$)/i.exec(url);
+  const collectionId = match?.[1] ?? null;
+
+  return collectionId !== null && expectedPublicationSegment.endsWith(collectionId);
+}
+
+function isFlipsnackDataJsonUrlForCollection(url: string, collectionId: string | null): boolean {
+  if (collectionId === null) {
+    return false;
+  }
+
+  return new URL(url).pathname.includes(`/collections/${collectionId}/data.json`);
+}
+
+function parseTausteFlipsnackDataJson(value: JsonValue): TausteFlipsnackDataJson {
+  if (!isJsonObject(value)) {
+    return { pageIds: [] };
+  }
+
+  const pages = value['pages'] ?? null;
+
+  if (!isJsonObject(pages) || !Array.isArray(pages['order'])) {
+    return { pageIds: [] };
+  }
+
+  return {
+    pageIds: pages['order'].filter((pageId): pageId is string => typeof pageId === 'string'),
+  };
+}
+
+function createImageGalleryUrls(
+  dataJsonUrl: string,
+  dataJson: TausteFlipsnackDataJson,
+): readonly string[] {
+  const url = new URL(dataJsonUrl);
+  const directoryPath = url.pathname.replace(/\/data\.json$/i, '');
+  const query = url.search;
+
+  return dataJson.pageIds.map((pageId) => {
+    const imageUrl = new URL(`${directoryPath}/covers/${encodeURIComponent(pageId)}/original`, url);
+    imageUrl.search = query;
+    return imageUrl.toString();
+  });
+}
+
+function isJsonObject(value: JsonValue): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 class PlaywrightTausteOpenedPublicationPage implements TausteOpenedPublicationPage {
   private readonly page: Page;
 
   private readonly closeOnDone: boolean;
 
+  private readonly returnUrl: string | null;
+
   private readonly timeoutMs: number;
 
-  constructor(page: Page, closeOnDone: boolean, timeoutMs: number) {
+  private dataJson: TausteFlipsnackDataJson | null = null;
+
+  private dataJsonUrl: string | null = null;
+
+  private fallbackDataJson: TausteFlipsnackDataJson | null = null;
+
+  private fallbackDataJsonUrl: string | null = null;
+
+  private readonly responseListener: (response: Response) => void;
+
+  private readonly expectedPublicationSegment: string | null;
+
+  private expectedCollectionId: string | null = null;
+
+  constructor(page: Page, closeOnDone: boolean, returnUrl: string | null, timeoutMs: number) {
     this.page = page;
     this.closeOnDone = closeOnDone;
+    this.returnUrl = returnUrl;
     this.timeoutMs = timeoutMs;
+    this.expectedPublicationSegment = readTausteFlipsnackPublicationSegment(page.url());
+    this.responseListener = (response) => {
+      if (!isFlipsnackDataJsonUrl(response.url(), null)) {
+        return;
+      }
+
+      void response
+        .json()
+        .then((value: JsonValue) => {
+          const dataJson = parseTausteFlipsnackDataJson(value);
+
+          if (isFlipsnackDataJsonUrl(response.url(), this.expectedPublicationSegment)) {
+            this.dataJson = dataJson;
+            this.dataJsonUrl = response.url();
+            return;
+          }
+
+          this.fallbackDataJson = dataJson;
+          this.fallbackDataJsonUrl = response.url();
+        })
+        .catch(() => undefined);
+    };
+    this.page.on('response', this.responseListener);
   }
 
   async waitForPublicationPlayer(): Promise<void> {
-    await this.page.locator('#myPlayer, iframe#player-iframe').first().waitFor({
+    await this.page.locator('iframe#player-iframe').first().waitFor({
       state: 'visible',
       timeout: this.timeoutMs,
     });
+    await this.playerFrame().locator('img, canvas, [role="button"], button').first().waitFor({
+      state: 'visible',
+      timeout: this.timeoutMs,
+    });
+    this.expectedCollectionId = await this.readFlipbookHash();
   }
 
   getPdfDownloadVisualTarget(): Promise<TausteLeafletVisualTarget> {
@@ -270,9 +418,13 @@ class PlaywrightTausteOpenedPublicationPage implements TausteOpenedPublicationPa
   }
 
   async resolvePdfDownloadUrl(): Promise<string> {
-    const href = await this.pdfDownloadLocator().getAttribute('href', {
-      timeout: this.timeoutMs,
-    });
+    const link = this.pdfDownloadLinkLocator();
+    const href =
+      (await link.count()) === 0
+        ? null
+        : await link.getAttribute('href', {
+            timeout: Math.min(this.timeoutMs, 5_000),
+          });
 
     if (href === null || href.trim().length === 0) {
       return '';
@@ -281,21 +433,214 @@ class PlaywrightTausteOpenedPublicationPage implements TausteOpenedPublicationPa
     return new URL(href, this.page.url()).toString();
   }
 
+  async resolveImageGalleryUrls(): Promise<readonly string[]> {
+    const dataJson = await this.waitForDataJson();
+    const dataJsonUrl = this.dataJsonUrl;
+
+    if (dataJsonUrl !== null && dataJson.pageIds.length > 0) {
+      return createImageGalleryUrls(dataJsonUrl, dataJson);
+    }
+
+    return this.readVisibleImageGalleryUrls();
+  }
+
+  async downloadImageGalleryUrls(
+    imageUrls: readonly string[],
+  ): Promise<readonly DownloadedTausteImageGalleryImage[]> {
+    const downloadedImages: DownloadedTausteImageGalleryImage[] = [];
+
+    for (const imageUrl of imageUrls) {
+      const response = await this.page.request.get(imageUrl, {
+        headers: {
+          Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+          Referer: this.page.url(),
+        },
+        timeout: this.timeoutMs,
+      });
+
+      if (!response.ok()) {
+        throw new Error(
+          `Failed to download Tauste image page from ${imageUrl}: ${String(response.status())} ${response.statusText()}`,
+        );
+      }
+
+      const body = await response.body();
+
+      if (body.byteLength === 0) {
+        throw new Error(`Downloaded Tauste image page cannot be empty: ${imageUrl}`);
+      }
+
+      downloadedImages.push({
+        sourceUrl: imageUrl,
+        body,
+        contentType: parseLeafletImageContentType(
+          response.headers()['content-type'] ?? null,
+          imageUrl,
+        ),
+      });
+    }
+
+    return downloadedImages;
+  }
+
   getCurrentUrl(): Promise<string> {
     return Promise.resolve(this.page.url());
   }
 
   async close(): Promise<void> {
+    this.page.off('response', this.responseListener);
+
     if (this.closeOnDone) {
       await this.page.close();
+      return;
+    }
+
+    if (this.returnUrl !== null) {
+      await this.page.goto(this.returnUrl, {
+        timeout: this.timeoutMs,
+        waitUntil: 'domcontentloaded',
+      });
     }
   }
 
   private pdfDownloadLocator(): Locator {
-    return this.page
+    return this.pdfDownloadLinkLocator().or(this.pdfDownloadButtonLocator()).first();
+  }
+
+  private pdfDownloadLinkLocator(): Locator {
+    return this.playerFrame()
       .getByRole('link', { name: /download|baixar|pdf/i })
+      .or(this.page.getByRole('link', { name: /download|baixar|pdf/i }))
+      .or(this.playerFrame().locator('a[href*=".pdf"], a[href*="download"]'))
+      .or(this.page.locator('a[href*=".pdf"], a[href*="download"]'))
+      .first();
+  }
+
+  private pdfDownloadButtonLocator(): Locator {
+    return this.playerFrame()
+      .getByRole('button', { name: /download|baixar|pdf/i })
       .or(this.page.getByRole('button', { name: /download|baixar|pdf/i }))
       .first();
+  }
+
+  private playerFrame(): FrameLocator {
+    return this.page.frameLocator('iframe#player-iframe');
+  }
+
+  private async waitForDataJson(): Promise<TausteFlipsnackDataJson> {
+    if (this.dataJson !== null) {
+      return this.dataJson;
+    }
+
+    this.expectedCollectionId = this.expectedCollectionId ?? (await this.readFlipbookHash());
+    const response = await this.waitForExpectedDataJsonResponse();
+
+    if (response === null) {
+      const fallbackDataJson = this.fallbackDataJson;
+      const fallbackDataJsonUrl = this.fallbackDataJsonUrl;
+
+      if (fallbackDataJson === null || fallbackDataJsonUrl === null) {
+        return { pageIds: [] };
+      }
+
+      this.dataJson = fallbackDataJson;
+      this.dataJsonUrl = fallbackDataJsonUrl;
+
+      return fallbackDataJson;
+    }
+
+    const value = (await response.json()) as JsonValue;
+    const dataJson = parseTausteFlipsnackDataJson(value);
+    this.dataJson = dataJson;
+    this.dataJsonUrl = response.url();
+
+    return dataJson;
+  }
+
+  private async waitForExpectedDataJsonResponse(): Promise<Response | null> {
+    const collectionId = this.expectedCollectionId;
+
+    if (
+      collectionId !== null &&
+      this.fallbackDataJson !== null &&
+      this.fallbackDataJsonUrl !== null &&
+      isFlipsnackDataJsonUrlForCollection(this.fallbackDataJsonUrl, collectionId)
+    ) {
+      this.dataJson = this.fallbackDataJson;
+      this.dataJsonUrl = this.fallbackDataJsonUrl;
+
+      return null;
+    }
+
+    if (collectionId !== null) {
+      const collectionResponse = await this.page
+        .waitForResponse(
+          (candidateResponse) =>
+            isFlipsnackDataJsonUrlForCollection(candidateResponse.url(), collectionId),
+          {
+            timeout: Math.min(this.timeoutMs, 5_000),
+          },
+        )
+        .catch(() => null);
+
+      if (collectionResponse !== null) {
+        return collectionResponse;
+      }
+    }
+
+    if (this.expectedPublicationSegment !== null) {
+      const expectedResponse = await this.page
+        .waitForResponse(
+          (candidateResponse) =>
+            isFlipsnackDataJsonUrl(candidateResponse.url(), this.expectedPublicationSegment),
+          {
+            timeout: Math.min(this.timeoutMs, 5_000),
+          },
+        )
+        .catch(() => null);
+
+      if (expectedResponse !== null) {
+        return expectedResponse;
+      }
+    }
+
+    const response = await this.page
+      .waitForResponse(
+        (candidateResponse) => isFlipsnackDataJsonUrl(candidateResponse.url(), null),
+        {
+          timeout: Math.min(this.timeoutMs, 5_000),
+        },
+      )
+      .catch(() => null);
+
+    return response;
+  }
+
+  private async readFlipbookHash(): Promise<string | null> {
+    const scriptText = await this.page
+      .locator('script')
+      .evaluateAll((scripts) => scripts.map((script) => script.textContent).join('\n'))
+      .catch(() => '');
+    const match = /window\.flipbookHash\s*=\s*['"]([^'"]+)['"]/i.exec(scriptText);
+
+    return match?.[1] ?? null;
+  }
+
+  private async readVisibleImageGalleryUrls(): Promise<readonly string[]> {
+    const urls = await this.playerFrame()
+      .locator('img')
+      .evaluateAll((images) =>
+        images
+          .map((image) => {
+            const htmlImage = image as HTMLImageElement;
+
+            return htmlImage.currentSrc.length > 0 ? htmlImage.currentSrc : htmlImage.src;
+          })
+          .filter((url) => /\/collections\/[^/]+\/covers\/[^/]+\/original(?:\?|$)/i.test(url)),
+      )
+      .catch((): string[] => []);
+
+    return [...new Set(urls)];
   }
 
   private createVisualTarget(

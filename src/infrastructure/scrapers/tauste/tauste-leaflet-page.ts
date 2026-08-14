@@ -3,7 +3,7 @@ import type {
   VisualDatasetPage,
 } from '../../../application/ports/visual-dataset-page';
 import type { VisualViewport } from '../../../domain/visual/viewport';
-import type { TaustePublication } from './tauste-pdf-leaflet';
+import type { DownloadedTausteImageGalleryImage, TaustePublication } from './tauste-pdf-leaflet';
 
 export interface OpenTausteLeafletPageInput {
   readonly viewport: VisualViewport;
@@ -19,6 +19,10 @@ export interface TausteOpenedPublicationPage {
   waitForPublicationPlayer(): Promise<void>;
   getPdfDownloadVisualTarget(): Promise<TausteLeafletVisualTarget>;
   resolvePdfDownloadUrl(): Promise<string>;
+  resolveImageGalleryUrls(): Promise<readonly string[]>;
+  downloadImageGalleryUrls(
+    imageUrls: readonly string[],
+  ): Promise<readonly DownloadedTausteImageGalleryImage[]>;
   getCurrentUrl(): Promise<string>;
   close(): Promise<void>;
 }

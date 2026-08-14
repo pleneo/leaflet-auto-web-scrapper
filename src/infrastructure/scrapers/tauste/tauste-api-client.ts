@@ -241,7 +241,7 @@ function isTausteOfferPublication(title: string): boolean {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
 
-  return normalized.startsWith('ofertas tauste') || normalized.startsWith('especial festival');
+  return normalized.startsWith('ofertas tauste') && !normalized.includes('especial');
 }
 
 function validateDiscoveryInput(input: TaustePublicationDiscoveryInput): void {

@@ -67,6 +67,14 @@ import {
 import { CoopPlaywrightStrategyAdapter } from '../scrapers/coop/coop-playwright-strategy-adapter';
 import { listCoopMonitoredStores } from '../scrapers/coop/coop-targets';
 import { PlaywrightCoopLeafletPageFactory } from '../scrapers/coop/playwright-coop-leaflet-page.factory';
+import { PlaywrightTausteLeafletPageFactory } from '../scrapers/tauste/playwright-tauste-leaflet-page.factory';
+import { TausteApiClient } from '../scrapers/tauste/tauste-api-client';
+import { TausteApiExtractionService } from '../scrapers/tauste/tauste-api-extraction';
+import { TausteApiStrategyAdapter } from '../scrapers/tauste/tauste-api-strategy-adapter';
+import { TausteHybridStrategy } from '../scrapers/tauste/tauste-hybrid-strategy';
+import { TausteLeafletExtractor } from '../scrapers/tauste/tauste-leaflet-extractor';
+import { TaustePlaywrightStrategyAdapter } from '../scrapers/tauste/tauste-playwright-strategy-adapter';
+import type { TausteStartUrlMode } from '../scrapers/tauste/tauste-targets';
 import { MixMateusApiClient } from '../scrapers/mixmateus/mixmateus-api-client';
 import { MixMateusApiExtractionService } from '../scrapers/mixmateus/mixmateus-api-extraction';
 import { MixMateusApiStrategyAdapter } from '../scrapers/mixmateus/mixmateus-api-strategy-adapter';
@@ -98,6 +106,7 @@ import {
 import { parseCarnaubaPlaywrightCommandOptions } from './carnauba-playwright-command-options';
 import { parseComboAtacadistaCommandOptions } from './combo-atacadista-command-options';
 import { parseCoopCommandOptions } from './coop-command-options';
+import { parseTausteCommandOptions } from './tauste-command-options';
 import {
   filterExtractionWorkerCommandArguments,
   parseExtractionWorkerCommandOptions,
@@ -126,6 +135,7 @@ async function run(): Promise<void> {
   const assaiOptions = parseAssaiPlaywrightCommandOptions(scraperArgs, process.env);
   const comboAtacadistaOptions = parseComboAtacadistaCommandOptions(scraperArgs, process.env);
   const coopOptions = parseCoopCommandOptions(scraperArgs, process.env);
+  const tausteOptions = parseTausteCommandOptions(scraperArgs, process.env);
   const logger = createLogger(process.env);
   const clock = new SystemClock();
   const visualDatasetRootDirectory = resolve(
@@ -135,6 +145,10 @@ async function run(): Promise<void> {
   const coopVisualDatasetRootDirectory = resolve(
     process.cwd(),
     coopOptions.visualDatasetRootDirectory,
+  );
+  const tausteVisualDatasetRootDirectory = resolve(
+    process.cwd(),
+    tausteOptions.visualDatasetRootDirectory,
   );
   const carnaubaPlaywrightStrategy = createPlaywrightExtractionStrategy(
     createCarnaubaStrategy(carnaubaOptions, visualDatasetRootDirectory, clock, logger),
@@ -184,6 +198,37 @@ async function run(): Promise<void> {
       createCoopStrategy(coopOptions, 'home', coopVisualDatasetRootDirectory, clock, logger),
     ),
   });
+  const taustePlaywrightStrategy = createPlaywrightExtractionStrategy(
+    createTausteStrategy(
+      tausteOptions,
+      tausteOptions.startUrlMode,
+      tausteVisualDatasetRootDirectory,
+      clock,
+      logger,
+    ),
+  );
+  const tausteApiStrategy = createTausteApiStrategy(tausteOptions, clock, logger);
+  const tausteHybridStrategy = new TausteHybridStrategy({
+    apiStrategy: tausteApiStrategy,
+    directPlaywrightStrategy: createPlaywrightExtractionStrategy(
+      createTausteStrategy(
+        tausteOptions,
+        'flipsnack-profile',
+        tausteVisualDatasetRootDirectory,
+        clock,
+        logger,
+      ),
+    ),
+    institutionalPlaywrightStrategy: createPlaywrightExtractionStrategy(
+      createTausteStrategy(
+        tausteOptions,
+        'institutional-home',
+        tausteVisualDatasetRootDirectory,
+        clock,
+        logger,
+      ),
+    ),
+  });
   const extractionStrategies: ExtractionStrategy[] = [
     carnaubaPlaywrightStrategy,
     carnaubaApiStrategy,
@@ -224,6 +269,9 @@ async function run(): Promise<void> {
     coopPlaywrightStrategy,
     coopApiStrategy,
     coopHybridStrategy,
+    taustePlaywrightStrategy,
+    tausteApiStrategy,
+    tausteHybridStrategy,
   ];
   const runner = new ScheduledExtractionRunner(
     {
@@ -302,6 +350,15 @@ async function run(): Promise<void> {
           supermarketId: 'coop',
           supermarketName: 'Coop Supermercados',
           mode: resolveWorkerTargetMode(workerOptions.extractionMode, 'coop'),
+          enabled: true,
+          intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
+          maxAttempts: 1,
+        }),
+        createExtractionTarget({
+          targetId: 'tauste',
+          supermarketId: 'tauste',
+          supermarketName: 'Tauste Supermercados',
+          mode: resolveWorkerTargetMode(workerOptions.extractionMode, 'tauste'),
           enabled: true,
           intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
           maxAttempts: 1,
@@ -908,6 +965,84 @@ function createCoopApiStrategy(
   );
 }
 
+function createTausteStrategy(
+  options: ReturnType<typeof parseTausteCommandOptions>,
+  startUrlMode: TausteStartUrlMode,
+  visualDatasetRootDirectory: string,
+  clock: SystemClock,
+  logger: Logger,
+): TaustePlaywrightStrategyAdapter {
+  const visualDatasetCaptureService =
+    options.visualDatasetEnabled && visualDatasetRootDirectory.trim().length > 0
+      ? new VisualDatasetCaptureService(
+          new FileSystemVisualDatasetSampleRepository({
+            rootDirectory: visualDatasetRootDirectory,
+          }),
+          clock,
+        )
+      : undefined;
+  const extractionService = new TausteLeafletExtractor(
+    new PlaywrightTausteLeafletPageFactory(),
+    clock,
+    logger,
+    visualDatasetCaptureService,
+  );
+
+  return new TaustePlaywrightStrategyAdapter(
+    {
+      extractionInput: {
+        startUrlMode,
+        institutionalHomeUrl: options.institutionalHomeUrl,
+        institutionalOffersUrl: options.institutionalOffersUrl,
+        profileUrl: options.flipsnackProfileUrl,
+        viewport: options.viewport,
+        timeoutMs: options.timeoutMs,
+        settleDelayMs: options.settleDelayMs,
+      },
+      outputRootDirectory: resolve(process.cwd(), options.outputRootDirectory),
+      visualDatasetRootDirectory,
+      visualDatasetSplit: options.visualDatasetSplit,
+    },
+    {
+      extractionService,
+      storage: new LocalSharedImageGalleryStorage(new FetchLeafletImageHttpClient()),
+      countVisualDatasetSamples,
+    },
+  );
+}
+
+function createTausteApiStrategy(
+  options: ReturnType<typeof parseTausteCommandOptions>,
+  clock: SystemClock,
+  logger: Logger,
+): TausteApiStrategyAdapter {
+  const apiClient = new TausteApiClient({
+    apiBaseUrl: options.flipsnackApiBaseUrl,
+  });
+  const extractionService = new TausteApiExtractionService(apiClient, apiClient, clock, logger);
+
+  return new TausteApiStrategyAdapter(
+    {
+      extractionInput: {
+        discoveryInput: {
+          page: 1,
+          accountId: options.flipsnackAccountId,
+          profileUrl: options.flipsnackProfileUrl,
+          excludeId: 0,
+          folderHash: '',
+          searchAfter: '0',
+          searchKey: '',
+        },
+      },
+      outputRootDirectory: resolve(process.cwd(), options.outputRootDirectory),
+    },
+    {
+      extractionService,
+      storage: new LocalSharedPdfLeafletStorage(new FetchLeafletPdfHttpClient()),
+    },
+  );
+}
+
 async function runCycle(runner: ScheduledExtractionRunner, shutdown: ShutdownState): Promise<void> {
   shutdown.activeCycle = runner.runCycle().then(() => undefined);
   await shutdown.activeCycle.finally(() => {
@@ -976,7 +1111,8 @@ function supportsApiExtraction(supermarketId: SupermarketId): boolean {
     supermarketId === 'mixmateus' ||
     supermarketId === 'angeloni' ||
     supermarketId === 'comboatacadista' ||
-    supermarketId === 'coop'
+    supermarketId === 'coop' ||
+    supermarketId === 'tauste'
   );
 }
 

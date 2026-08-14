@@ -137,6 +137,7 @@ export class LocalSharedPdfLeafletStorage {
     const directoryPath = buildExtractionDirectoryPath(input);
     const sharedPdfsDirectoryPath = buildSharedPdfsDirectoryPath(input);
     const sharedLeafletsDirectoryPath = buildSharedLeafletsDirectoryPath(input);
+    await mkdir(directoryPath, { recursive: true });
     await mkdir(sharedPdfsDirectoryPath, { recursive: true });
     await mkdir(sharedLeafletsDirectoryPath, { recursive: true });
 

@@ -8,8 +8,8 @@ import type { DatasetSplit } from '../../../domain/dataset/dataset-split';
 import type { VisualViewport } from '../../../domain/visual/viewport';
 import { filterTausteOfferPublications } from './tauste-api-client';
 import type {
-  ExtractedTaustePdfLeaflet,
-  TausteExtractedUnit,
+  ExtractedTausteImageGalleryLeaflet,
+  TausteImageGalleryExtractedUnit,
   TausteFailedPublication,
   TaustePublication,
 } from './tauste-pdf-leaflet';
@@ -46,7 +46,7 @@ export interface ExtractTausteVisualDatasetInput {
 export interface TausteLeafletExtractionResult {
   readonly source: 'tauste-playwright-direct';
   readonly extractedAtIso: string;
-  readonly units: readonly TausteExtractedUnit[];
+  readonly units: readonly TausteImageGalleryExtractedUnit[];
   readonly failedPublications: readonly TausteFailedPublication[];
 }
 
@@ -90,7 +90,7 @@ export class TausteLeafletExtractor {
       viewport: input.viewport,
       timeoutMs: input.timeoutMs,
     });
-    const leaflets: ExtractedTaustePdfLeaflet[] = [];
+    const leaflets: ExtractedTausteImageGalleryLeaflet[] = [];
     const failedPublications: TausteFailedPublication[] = [];
 
     try {
@@ -131,7 +131,9 @@ export class TausteLeafletExtractor {
         };
       }
 
-      for (const [cardIndex, publication] of publications.entries()) {
+      for (const [filteredIndex, publication] of publications.entries()) {
+        const cardIndex = publication.sourceCardIndex ?? filteredIndex;
+
         try {
           leaflets.push(await this.extractPublication(page, input, publication, cardIndex));
         } catch (error) {
@@ -221,7 +223,7 @@ export class TausteLeafletExtractor {
     input: ExtractTausteLeafletsInput,
     publication: TaustePublication,
     cardIndex: number,
-  ): Promise<ExtractedTaustePdfLeaflet> {
+  ): Promise<ExtractedTausteImageGalleryLeaflet> {
     await this.capturePublicationCardTarget(page, input, publication, cardIndex);
     const publicationPage = await page.openPublication(cardIndex);
 
@@ -232,23 +234,44 @@ export class TausteLeafletExtractor {
         stateName: 'PDF_DOWNLOAD',
         publicationId: publication.publicationId,
       });
+      await this.capturePdfDownloadTarget(publicationPage, input, publication, null);
       const pdfUrl = await publicationPage.resolvePdfDownloadUrl();
 
-      if (pdfUrl.trim().length === 0) {
+      if (pdfUrl.trim().length > 0) {
         throw new TausteLeafletExtractionError(
-          `Tauste publication did not expose a PDF download URL: ${publication.publicationUrl}`,
+          'Tauste Playwright PDF extraction is not configured for mixed PDF output.',
         );
       }
 
-      await this.capturePdfDownloadTarget(publicationPage, input, publication, pdfUrl);
+      this.logger.info('Tauste FSM state entered.', {
+        stateName: 'IMAGE_GALLERY',
+        publicationId: publication.publicationId,
+      });
+      const imageUrls = await publicationPage.resolveImageGalleryUrls();
+
+      if (imageUrls.length === 0) {
+        throw new TausteLeafletExtractionError(
+          `Tauste publication did not expose PDF or image page URLs: ${publication.publicationUrl}`,
+        );
+      }
+
+      const coverImageUrl = imageUrls[0];
+
+      if (coverImageUrl === undefined) {
+        throw new TausteLeafletExtractionError(
+          `Tauste publication did not expose image page URLs: ${publication.publicationUrl}`,
+        );
+      }
+      const downloadedImages = await publicationPage.downloadImageGalleryUrls(imageUrls);
 
       return {
         leafletId: publication.publicationId,
         title: publication.title,
         publicationUrl: await publicationPage.getCurrentUrl(),
-        coverImageUrl: publication.coverImageUrl,
+        coverImageUrl,
         publishedAtIso: publication.publishedAtIso,
-        pdfUrl,
+        imageUrls,
+        downloadedImages,
       };
     } finally {
       await publicationPage.close();
@@ -316,7 +339,7 @@ export class TausteLeafletExtractor {
     page: { getPdfDownloadVisualTarget(): Promise<TausteLeafletVisualTarget> },
     input: ExtractTausteLeafletsInput,
     publication: TaustePublication,
-    pdfUrl: string,
+    pdfUrl: string | null,
   ): Promise<void> {
     const visualTarget = await page.getPdfDownloadVisualTarget();
     await this.captureBeforeAction(input, visualTarget, {

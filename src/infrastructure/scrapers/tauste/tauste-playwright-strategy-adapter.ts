@@ -8,9 +8,9 @@ import type {
 import type { DatasetSplit } from '../../../domain/dataset/dataset-split';
 import type { SupermarketId } from '../../../domain/supermarket/supermarket-id';
 import type {
-  StoreSharedPdfLeafletExtractionInput,
-  StoredSharedPdfLeafletExtraction,
-} from '../../storage/leaflet-pdf-storage';
+  StoreSharedImageGalleryExtractionInput,
+  StoredSharedImageGalleryExtraction,
+} from '../../storage/shared-image-gallery-storage';
 import type {
   ExtractTausteLeafletsInput,
   TausteLeafletExtractionResult,
@@ -21,7 +21,7 @@ export interface TaustePlaywrightExtractionPort {
 }
 
 export interface TaustePlaywrightStoragePort {
-  store(input: StoreSharedPdfLeafletExtractionInput): Promise<StoredSharedPdfLeafletExtraction>;
+  store(input: StoreSharedImageGalleryExtractionInput): Promise<StoredSharedImageGalleryExtraction>;
 }
 
 export interface TaustePlaywrightStrategyAdapterConfig {
@@ -75,8 +75,8 @@ export class TaustePlaywrightStrategyAdapter implements PlaywrightExtractionStra
       supermarketId: this.supermarketId,
       status: resolveStatus(result),
       leafletsFound: result.units.reduce((total, unit) => total + unit.leaflets.length, 0),
-      artifactsDownloaded: stored.sharedPdfsDownloaded,
-      artifactsReused: stored.sharedPdfsReused,
+      artifactsDownloaded: stored.sharedImagesDownloaded,
+      artifactsReused: stored.sharedImagesReused,
       datasetSamplesCreated: samplesCreated,
       units: createExtractionUnits(result, stored),
       failures: result.failedPublications.map((failedPublication) => ({
@@ -107,7 +107,7 @@ function createExtractionInput(
 function createStorageInput(
   config: TaustePlaywrightStrategyAdapterConfig,
   result: TausteLeafletExtractionResult,
-): StoreSharedPdfLeafletExtractionInput {
+): StoreSharedImageGalleryExtractionInput {
   return {
     rootDirectory: config.outputRootDirectory,
     supermarketId: 'tauste',
@@ -119,7 +119,9 @@ function createStorageInput(
       leaflets: unit.leaflets.map((leaflet) => ({
         leafletId: leaflet.leafletId,
         title: leaflet.title,
-        pdfUrl: leaflet.pdfUrl,
+        coverImageUrl: leaflet.coverImageUrl,
+        imageUrls: leaflet.imageUrls,
+        downloadedImages: leaflet.downloadedImages,
       })),
     })),
   };
@@ -127,7 +129,7 @@ function createStorageInput(
 
 function createExtractionUnits(
   result: TausteLeafletExtractionResult,
-  stored: StoredSharedPdfLeafletExtraction,
+  stored: StoredSharedImageGalleryExtraction,
 ): readonly PlaywrightExtractionUnitOutput[] {
   const succeededUnits = stored.units.map((unit): PlaywrightExtractionUnitOutput => {
     return {
@@ -157,8 +159,8 @@ function createExtractionUnits(
 }
 
 function createExtractionLeaflet(
-  leaflet: StoredSharedPdfLeafletExtraction['units'][number]['leaflets'][number],
-  stored: StoredSharedPdfLeafletExtraction,
+  leaflet: StoredSharedImageGalleryExtraction['units'][number]['leaflets'][number],
+  stored: StoredSharedImageGalleryExtraction,
 ): PlaywrightExtractionLeafletOutput {
   const sharedLeaflet = stored.sharedLeaflets.find(
     (candidateLeaflet) => candidateLeaflet.contentSignature === leaflet.contentSignature,
@@ -168,8 +170,8 @@ function createExtractionLeaflet(
     leafletKey: leaflet.contentSignature,
     title: leaflet.title,
     contentSignature: leaflet.contentSignature,
-    artifactCount: sharedLeaflet === undefined ? 0 : 1,
-    sourceUrl: leaflet.pdfUrl,
+    artifactCount: sharedLeaflet?.images.length ?? 0,
+    sourceUrl: leaflet.coverImageUrl,
   };
 }
 

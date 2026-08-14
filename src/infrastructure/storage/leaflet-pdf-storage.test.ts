@@ -50,6 +50,20 @@ describe('LocalSharedPdfLeafletStorage', () => {
     );
   });
 
+  it('stores extraction metadata when no PDF units were extracted', async () => {
+    const storage = new LocalSharedPdfLeafletStorage(new FakePdfHttpClient());
+
+    const stored = await storage.store({
+      ...createInput(rootDirectory),
+      units: [],
+    });
+
+    expect(stored.units).toEqual([]);
+    expect(stored.sharedLeaflets).toEqual([]);
+    expect(stored.sharedPdfsDownloaded).toBe(0);
+    expect(await readFile(stored.metadataPath, 'utf8')).toContain('"units": []');
+  });
+
   it('rejects invalid input', async () => {
     const storage = new LocalSharedPdfLeafletStorage(new FakePdfHttpClient());
 

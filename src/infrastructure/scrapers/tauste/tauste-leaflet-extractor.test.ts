@@ -19,7 +19,7 @@ import type {
 import type { VisualDatasetSample } from '../../../domain/dataset/visual-dataset-sample';
 
 describe('TausteLeafletExtractor', () => {
-  it('extracts direct Flipsnack PDF leaflets and captures visual targets', async () => {
+  it('extracts direct Flipsnack image gallery leaflets and captures visual targets', async () => {
     const page = new FakeTausteLeafletPage([
       createPublication('tauste:ofertas-tauste-bauru', 'Ofertas Tauste Bauru'),
     ]);
@@ -45,9 +45,24 @@ describe('TausteLeafletExtractor', () => {
               title: 'Ofertas Tauste Bauru',
               publicationUrl:
                 'https://www.flipsnack.com/taustesupermercado/ofertas-tauste-bauru.html',
-              coverImageUrl: 'https://cdn.example.com/cover.jpg',
+              coverImageUrl: 'https://cdn.example.com/page-1.jpg',
               publishedAtIso: '2026-08-11T09:00:03.000Z',
-              pdfUrl: 'https://cdn.example.com/ofertas-tauste-bauru.pdf',
+              imageUrls: [
+                'https://cdn.example.com/page-1.jpg',
+                'https://cdn.example.com/page-2.jpg',
+              ],
+              downloadedImages: [
+                {
+                  sourceUrl: 'https://cdn.example.com/page-1.jpg',
+                  body: Uint8Array.of(1, 2, 3),
+                  contentType: 'image/jpeg',
+                },
+                {
+                  sourceUrl: 'https://cdn.example.com/page-2.jpg',
+                  body: Uint8Array.of(4, 5, 6),
+                  contentType: 'image/jpeg',
+                },
+              ],
             },
           ],
         },
@@ -62,8 +77,10 @@ describe('TausteLeafletExtractor', () => {
       'open:0',
       'wait-player',
       'wait:1000',
-      'resolve-pdf',
       'target:download',
+      'resolve-pdf',
+      'resolve-images',
+      'download-images',
       'close-publication',
       'close-page',
     ]);
@@ -77,7 +94,7 @@ describe('TausteLeafletExtractor', () => {
     const page = new FakeTausteLeafletPage([
       createPublication('tauste:ofertas-tauste-marilia', 'Ofertas Tauste Marília'),
     ]);
-    page.pdfUrl = '';
+    page.imageUrls = [];
     const extractor = new TausteLeafletExtractor(
       new FakePageFactory(page),
       new FixedClock(),
@@ -93,7 +110,7 @@ describe('TausteLeafletExtractor', () => {
         title: 'Ofertas Tauste Marília',
         sourceUrl: 'https://www.flipsnack.com/taustesupermercado/ofertas-tauste-marilia.html',
         errorMessage:
-          'Tauste publication did not expose a PDF download URL: https://www.flipsnack.com/taustesupermercado/ofertas-tauste-marilia.html',
+          'Tauste publication did not expose PDF or image page URLs: https://www.flipsnack.com/taustesupermercado/ofertas-tauste-marilia.html',
       },
     ]);
     expect(page.actions.includes('close-page')).toBe(true);
@@ -115,9 +132,52 @@ describe('TausteLeafletExtractor', () => {
     });
   });
 
-  it('extracts direct PDF leaflets without visual dataset configuration', async () => {
+  it('records a failed publication when the Playwright path finds a direct PDF URL', async () => {
     const page = new FakeTausteLeafletPage([
       createPublication('tauste:ofertas-tauste-bauru', 'Ofertas Tauste Bauru'),
+    ]);
+    page.pdfUrl = 'https://cdn.example.com/ofertas-tauste-bauru.pdf';
+    const extractor = new TausteLeafletExtractor(
+      new FakePageFactory(page),
+      new FixedClock(),
+      new NullLogger(),
+    );
+
+    const result = await extractor.extract(createInputWithoutVisualDataset());
+
+    expect(result.units).toEqual([]);
+    expect(result.failedPublications[0]?.errorMessage).toBe(
+      'Tauste Playwright PDF extraction is not configured for mixed PDF output.',
+    );
+  });
+
+  it('records a failed publication when the image gallery first URL is missing', async () => {
+    const page = new FakeTausteLeafletPage([
+      createPublication('tauste:ofertas-tauste-bauru', 'Ofertas Tauste Bauru'),
+    ]);
+    page.imageUrls = [undefined] as never;
+    const extractor = new TausteLeafletExtractor(
+      new FakePageFactory(page),
+      new FixedClock(),
+      new NullLogger(),
+    );
+
+    const result = await extractor.extract(createInputWithoutVisualDataset());
+
+    expect(result.units).toEqual([]);
+    expect(result.failedPublications[0]?.errorMessage).toBe(
+      'Tauste publication did not expose image page URLs: https://www.flipsnack.com/taustesupermercado/ofertas-tauste-bauru.html',
+    );
+  });
+
+  it('uses the original source card index after filtering non-regular publications', async () => {
+    const page = new FakeTausteLeafletPage([
+      createPublication('tauste:ofertas-tauste-especial-nestle', 'Ofertas Tauste Especial Nestlé', {
+        sourceCardIndex: 0,
+      }),
+      createPublication('tauste:ofertas-tauste-bauru', 'Ofertas Tauste Bauru', {
+        sourceCardIndex: 1,
+      }),
     ]);
     const extractor = new TausteLeafletExtractor(
       new FakePageFactory(page),
@@ -125,18 +185,42 @@ describe('TausteLeafletExtractor', () => {
       new NullLogger(),
     );
 
-    await expect(extractor.extract(createInputWithoutVisualDataset())).resolves.toMatchObject({
-      units: [
+    await extractor.extract(createInputWithoutVisualDataset());
+
+    expect(page.actions).toContain('target:card:1');
+    expect(page.actions).toContain('open:1');
+    expect(page.actions).not.toContain('open:0');
+  });
+
+  it('maps profile navigation failures into typed extraction failures', async () => {
+    const page = new FakeTausteLeafletPage([
+      createPublication('tauste:ofertas-tauste-bauru', 'Ofertas Tauste Bauru'),
+    ]);
+    page.failProfileWait = true;
+    const extractor = new TausteLeafletExtractor(
+      new FakePageFactory(page),
+      new FixedClock(),
+      new NullLogger(),
+    );
+
+    await expect(extractor.extract(createInputWithoutVisualDataset())).resolves.toEqual({
+      source: 'tauste-playwright-direct',
+      extractedAtIso: '2026-08-13T10:00:00.000Z',
+      units: [],
+      failedPublications: [
         {
-          leaflets: [
-            {
-              pdfUrl: 'https://cdn.example.com/ofertas-tauste-bauru.pdf',
-            },
-          ],
+          publicationId: 'tauste:flipsnack-profile',
+          title: 'Tauste Flipsnack profile',
+          sourceUrl: 'https://www.flipsnack.com/taustesupermercado/',
+          errorMessage: 'Profile did not load.',
         },
       ],
-      failedPublications: [],
     });
+    expect(page.actions).toEqual([
+      'goto:https://www.flipsnack.com/taustesupermercado/',
+      'wait-profile',
+      'close-page',
+    ]);
   });
 
   it('navigates from the institutional home and captures the offers CTA', async () => {
@@ -227,10 +311,11 @@ describe('TausteLeafletExtractor', () => {
     });
   });
 
-  it('navigates institutional defaults without visual dataset metadata', async () => {
+  it('uses Tauste default offers URL in institutional visual subjects', async () => {
     const page = new FakeTausteLeafletPage([
       createPublication('tauste:ofertas-tauste-bauru', 'Ofertas Tauste Bauru'),
     ]);
+    page.failHeroNavigation = true;
     const captureService = new FakeCaptureService();
     const extractor = new TausteLeafletExtractor(
       new FakePageFactory(page),
@@ -242,19 +327,23 @@ describe('TausteLeafletExtractor', () => {
     await extractor.extract({
       ...createInputWithoutVisualDataset(),
       startUrlMode: 'institutional-home',
+      visualDataset: {
+        runId: 'run-1',
+        split: 'unassigned',
+      },
     });
 
-    expect(page.actions.slice(0, 5)).toEqual([
-      'goto:https://institucional.tauste.com.br/',
-      'wait-home',
-      'wait:1000',
-      'target:hero',
-      'open-hero',
-    ]);
-    expect(captureService.inputs).toEqual([]);
+    expect(captureService.inputs[0]?.subject).toEqual({
+      subjectKind: 'tauste-home-offers-link',
+      href: 'https://institucional.tauste.com.br/ofertas',
+    });
+    expect(captureService.inputs[1]?.subject).toEqual({
+      subjectKind: 'tauste-footer-offers-link',
+      href: 'https://institucional.tauste.com.br/ofertas',
+    });
   });
 
-  it('falls back to footer defaults without visual dataset metadata', async () => {
+  it('does not persist samples when visual dataset input is absent even with capture service', async () => {
     const page = new FakeTausteLeafletPage([
       createPublication('tauste:ofertas-tauste-bauru', 'Ofertas Tauste Bauru'),
     ]);
@@ -282,6 +371,7 @@ describe('TausteLeafletExtractor', () => {
       'open-footer',
     ]);
     expect(captureService.inputs).toEqual([]);
+    expect(page.actions).toContain('target:download');
   });
 
   it('maps profile navigation failures into typed extraction failures', async () => {
@@ -336,18 +426,25 @@ describe('TausteLeafletExtractor', () => {
     ).rejects.toThrow('timeoutMs must be positive.');
   });
 
-  it('creates default direct extraction input', () => {
+  it('creates default extraction input from Tauste stable anchors', () => {
     expect(
       createDefaultTausteLeafletExtractionInput(
-        createVisualViewport({ width: 1366, height: 768, deviceScaleFactor: 1 }),
-        30_000,
-        1_000,
+        createVisualViewport({ width: 1024, height: 768, deviceScaleFactor: 1 }),
+        15_000,
+        500,
       ),
-    ).toMatchObject({
+    ).toEqual({
       startUrlMode: 'flipsnack-profile',
+      institutionalHomeUrl: 'https://institucional.tauste.com.br/',
+      institutionalOffersUrl: 'https://institucional.tauste.com.br/ofertas',
       profileUrl: 'https://www.flipsnack.com/taustesupermercado/',
-      timeoutMs: 30_000,
-      settleDelayMs: 1_000,
+      viewport: {
+        width: 1024,
+        height: 768,
+        deviceScaleFactor: 1,
+      },
+      timeoutMs: 15_000,
+      settleDelayMs: 500,
     });
   });
 });
@@ -376,16 +473,30 @@ function createInputWithoutVisualDataset(): ExtractTausteLeafletsInput {
   };
 }
 
-function createPublication(publicationId: string, title: string): TaustePublication {
+function createPublication(
+  publicationId: string,
+  title: string,
+  options: {
+    readonly sourceCardIndex?: number;
+  } = {},
+): TaustePublication {
   const slug = publicationId.replace('tauste:', '');
-
-  return {
+  const publication: TaustePublication = {
     publicationId,
     title,
     directLink: `${slug}.html`,
     publicationUrl: `https://www.flipsnack.com/taustesupermercado/${slug}.html`,
     coverImageUrl: 'https://cdn.example.com/cover.jpg',
     publishedAtIso: '2026-08-11T09:00:03.000Z',
+  };
+
+  if (options.sourceCardIndex === undefined) {
+    return publication;
+  }
+
+  return {
+    ...publication,
+    sourceCardIndex: options.sourceCardIndex,
   };
 }
 
@@ -404,7 +515,9 @@ class FakePageFactory implements TausteLeafletPageFactory {
 class FakeTausteLeafletPage implements TausteLeafletPage {
   readonly actions: string[] = [];
 
-  pdfUrl = 'https://cdn.example.com/ofertas-tauste-bauru.pdf';
+  pdfUrl = '';
+
+  imageUrls = ['https://cdn.example.com/page-1.jpg', 'https://cdn.example.com/page-2.jpg'];
 
   failHeroNavigation = false;
 
@@ -510,6 +623,40 @@ class FakeOpenedPublicationPage implements TausteOpenedPublicationPage {
   resolvePdfDownloadUrl(): Promise<string> {
     this.parent.actions.push('resolve-pdf');
     return Promise.resolve(this.parent.pdfUrl);
+  }
+
+  resolveImageGalleryUrls(): Promise<readonly string[]> {
+    this.parent.actions.push('resolve-images');
+    return Promise.resolve(this.parent.imageUrls);
+  }
+
+  downloadImageGalleryUrls(): Promise<
+    readonly [
+      {
+        readonly sourceUrl: 'https://cdn.example.com/page-1.jpg';
+        readonly body: Uint8Array;
+        readonly contentType: 'image/jpeg';
+      },
+      {
+        readonly sourceUrl: 'https://cdn.example.com/page-2.jpg';
+        readonly body: Uint8Array;
+        readonly contentType: 'image/jpeg';
+      },
+    ]
+  > {
+    this.parent.actions.push('download-images');
+    return Promise.resolve([
+      {
+        sourceUrl: 'https://cdn.example.com/page-1.jpg',
+        body: Uint8Array.of(1, 2, 3),
+        contentType: 'image/jpeg',
+      },
+      {
+        sourceUrl: 'https://cdn.example.com/page-2.jpg',
+        body: Uint8Array.of(4, 5, 6),
+        contentType: 'image/jpeg',
+      },
+    ]);
   }
 
   getCurrentUrl(): Promise<string> {

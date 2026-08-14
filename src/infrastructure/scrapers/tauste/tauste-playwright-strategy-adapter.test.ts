@@ -3,9 +3,9 @@ import type { Logger } from '../../../application/ports/logger';
 import type { PlaywrightExtractionInput } from '../../../application/ports/playwright-extraction-strategy';
 import { createVisualViewport } from '../../../domain/visual/viewport';
 import type {
-  StoreSharedPdfLeafletExtractionInput,
-  StoredSharedPdfLeafletExtraction,
-} from '../../storage/leaflet-pdf-storage';
+  StoreSharedImageGalleryExtractionInput,
+  StoredSharedImageGalleryExtraction,
+} from '../../storage/shared-image-gallery-storage';
 import type {
   ExtractTausteLeafletsInput,
   TausteLeafletExtractionResult,
@@ -19,7 +19,7 @@ import {
 describe('TaustePlaywrightStrategyAdapter', () => {
   it('maps Playwright extraction output and counts visual dataset samples', async () => {
     const extractionService = new FakePlaywrightExtractionService(createExtractionResult());
-    const storage = new FakePdfStorage(createStoredExtraction());
+    const storage = new FakeImageGalleryStorage(createStoredExtraction());
     const adapter = createAdapter(extractionService, storage, () => Promise.resolve(2));
 
     const output = await adapter.execute(createInput('always'));
@@ -27,7 +27,7 @@ describe('TaustePlaywrightStrategyAdapter', () => {
     expect(output).toMatchObject({
       status: 'partially_succeeded',
       leafletsFound: 1,
-      artifactsDownloaded: 1,
+      artifactsDownloaded: 2,
       artifactsReused: 0,
       datasetSamplesCreated: 2,
       failures: [
@@ -50,7 +50,7 @@ describe('TaustePlaywrightStrategyAdapter', () => {
         ...createExtractionResult(),
         failedPublications: [],
       }),
-      new FakePdfStorage({
+      new FakeImageGalleryStorage({
         ...createStoredExtraction(),
         sharedLeaflets: [],
       }),
@@ -61,7 +61,7 @@ describe('TaustePlaywrightStrategyAdapter', () => {
         ...createExtractionResult(),
         units: [],
       }),
-      new FakePdfStorage({
+      new FakeImageGalleryStorage({
         ...createStoredExtraction(),
         units: [],
         sharedLeaflets: [],
@@ -82,7 +82,7 @@ describe('TaustePlaywrightStrategyAdapter', () => {
         ...createExtractionResult(),
         failedPublications: [],
       }),
-      new FakePdfStorage({
+      new FakeImageGalleryStorage({
         ...createStoredExtraction(),
         units: [createEmptyStoredUnit()],
       }),
@@ -163,9 +163,21 @@ function createExtractionResult(): TausteLeafletExtractionResult {
             title: 'Ofertas Tauste Bauru',
             publicationUrl:
               'https://www.flipsnack.com/taustesupermercado/ofertas-tauste-bauru.html',
-            coverImageUrl: 'https://cdn.example.com/cover.jpg',
+            coverImageUrl: 'https://cdn.example.com/page-1.jpg',
             publishedAtIso: '2026-08-11T09:00:03.000Z',
-            pdfUrl: 'https://cdn.example.com/ofertas-tauste-bauru.pdf',
+            imageUrls: ['https://cdn.example.com/page-1.jpg', 'https://cdn.example.com/page-2.jpg'],
+            downloadedImages: [
+              {
+                sourceUrl: 'https://cdn.example.com/page-1.jpg',
+                body: Uint8Array.of(1, 2, 3),
+                contentType: 'image/jpeg',
+              },
+              {
+                sourceUrl: 'https://cdn.example.com/page-2.jpg',
+                body: Uint8Array.of(4, 5, 6),
+                contentType: 'image/jpeg',
+              },
+            ],
           },
         ],
       },
@@ -181,15 +193,16 @@ function createExtractionResult(): TausteLeafletExtractionResult {
   };
 }
 
-function createStoredExtraction(): StoredSharedPdfLeafletExtraction {
+function createStoredExtraction(): StoredSharedImageGalleryExtraction {
   return {
     directoryPath: '.data/leaflets-playwright/tauste/2026-08-13/10-00',
     metadataPath: '.data/leaflets-playwright/tauste/2026-08-13/10-00/metadata.json',
-    sharedPdfsDirectoryPath: '.data/leaflets-playwright/tauste/shared-pdfs',
+    sharedImagesDirectoryPath: '.data/leaflets-playwright/tauste/shared-images',
+    sharedLeafletsDirectoryPath: '.data/leaflets-playwright/tauste/shared-leaflets',
     sharedLeafletsCreated: 1,
     sharedLeafletsReused: 0,
-    sharedPdfsDownloaded: 1,
-    sharedPdfsReused: 0,
+    sharedImagesDownloaded: 2,
+    sharedImagesReused: 0,
     units: [
       {
         unitId: 'tauste-supermercados',
@@ -202,7 +215,7 @@ function createStoredExtraction(): StoredSharedPdfLeafletExtraction {
           {
             leafletId: 'tauste:ofertas-tauste-bauru',
             title: 'Ofertas Tauste Bauru',
-            pdfUrl: 'https://cdn.example.com/ofertas-tauste-bauru.pdf',
+            coverImageUrl: 'https://cdn.example.com/page-1.jpg',
             contentSignature: 'signature-1',
             sharedLeafletDirectoryPath: '.data/shared-leaflets/signature-1',
             referencePath: '.data/unit/leaflets/signature-1.json',
@@ -217,20 +230,32 @@ function createStoredExtraction(): StoredSharedPdfLeafletExtraction {
         title: 'Ofertas Tauste Bauru',
         directoryPath: '.data/shared-leaflets/signature-1',
         metadataPath: '.data/shared-leaflets/signature-1/metadata.json',
-        pdf: {
-          sourceUrl: 'https://cdn.example.com/ofertas-tauste-bauru.pdf',
-          canonicalUrl: 'https://cdn.example.com/ofertas-tauste-bauru.pdf',
-          filePath: '.data/shared-pdfs/1.pdf',
-          contentType: 'application/pdf',
-          byteLength: 100,
-          contentHash: 'hash-1',
-        },
+        images: [
+          {
+            order: 1,
+            sourceUrl: 'https://cdn.example.com/page-1.jpg',
+            canonicalUrl: 'https://cdn.example.com/page-1.jpg',
+            filePath: '.data/shared-images/1.jpg',
+            contentType: 'image/jpeg',
+            byteLength: 100,
+            contentHash: 'hash-1',
+          },
+          {
+            order: 2,
+            sourceUrl: 'https://cdn.example.com/page-2.jpg',
+            canonicalUrl: 'https://cdn.example.com/page-2.jpg',
+            filePath: '.data/shared-images/2.jpg',
+            contentType: 'image/jpeg',
+            byteLength: 100,
+            contentHash: 'hash-2',
+          },
+        ],
       },
     ],
   };
 }
 
-function createEmptyStoredUnit(): StoredSharedPdfLeafletExtraction['units'][number] {
+function createEmptyStoredUnit(): StoredSharedImageGalleryExtraction['units'][number] {
   return {
     unitId: 'tauste-supermercados',
     unitName: 'Tauste Supermercados',
@@ -257,16 +282,18 @@ class FakePlaywrightExtractionService implements TaustePlaywrightExtractionPort 
   }
 }
 
-class FakePdfStorage implements TaustePlaywrightStoragePort {
-  readonly inputs: StoreSharedPdfLeafletExtractionInput[] = [];
+class FakeImageGalleryStorage implements TaustePlaywrightStoragePort {
+  readonly inputs: StoreSharedImageGalleryExtractionInput[] = [];
 
-  private readonly stored: StoredSharedPdfLeafletExtraction;
+  private readonly stored: StoredSharedImageGalleryExtraction;
 
-  constructor(stored: StoredSharedPdfLeafletExtraction) {
+  constructor(stored: StoredSharedImageGalleryExtraction) {
     this.stored = stored;
   }
 
-  store(input: StoreSharedPdfLeafletExtractionInput): Promise<StoredSharedPdfLeafletExtraction> {
+  store(
+    input: StoreSharedImageGalleryExtractionInput,
+  ): Promise<StoredSharedImageGalleryExtraction> {
     this.inputs.push(input);
     return Promise.resolve(this.stored);
   }

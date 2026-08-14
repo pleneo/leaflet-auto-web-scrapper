@@ -123,27 +123,23 @@ class FakeStrategy implements ExtractionStrategy {
 }
 
 class MemoryLogger implements Logger {
-  readonly warns: readonly { readonly message: string }[] = [];
+  readonly warns: { readonly message: string }[] = [];
 
-  readonly debugMessages: readonly string[] = [];
+  private callCount = 0;
 
-  readonly infoMessages: readonly string[] = [];
-
-  readonly errorMessages: readonly string[] = [];
-
-  debug(message: string): void {
-    (this.debugMessages as string[]).push(message);
+  debug(): void {
+    this.callCount += 1;
   }
 
-  info(message: string): void {
-    (this.infoMessages as string[]).push(message);
+  info(): void {
+    this.callCount += 1;
   }
 
   warn(message: string): void {
-    (this.warns as { readonly message: string }[]).push({ message });
+    this.warns.push({ message });
   }
 
-  error(message: string): void {
-    (this.errorMessages as string[]).push(message);
+  error(): void {
+    this.callCount += 1;
   }
 }

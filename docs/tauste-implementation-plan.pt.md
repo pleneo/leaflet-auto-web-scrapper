@@ -170,6 +170,31 @@ Este fluxo nao gera dataset visual. Ele existe para producao rapida. Ele so pode
 
 Este fluxo e o primeiro fallback quando a API falhar ou nao resolver o PDF.
 
+#### Fallback Obrigatorio Para Galeria De Imagens
+
+O Flipsnack pode exibir o botao visual de download sem expor uma URL direta de PDF no HTML ou no botao. Nesse caso, a extracao nao deve terminar apenas como falha se o player disponibilizar as paginas do encarte como imagens.
+
+O fallback de imagens deve seguir este protocolo:
+
+1. Abrir cada publicacao com Playwright, preservando a captura visual do card antes do clique.
+2. Aguardar o `iframe#player-iframe` do Flipsnack carregar.
+3. Capturar o alvo visual do botao/controle de download ou do player antes de tentar resolver o artefato final.
+4. Observar a requisicao assinada do player para `.../collections/{collectionHash}/data.json`.
+5. Parsear o `data.json` de forma tipada e extrair `pages.order`.
+6. Montar as URLs das imagens a partir da propria URL assinada do `data.json`, no formato:
+
+```text
+https://d3u72tnj701eui.cloudfront.net/{accountId}/collections/{collectionHash}/covers/{pageId}/original?{assinatura}
+```
+
+7. Baixar essas imagens por HTTP usando o storage compartilhado de galerias de imagens.
+8. Persistir o encarte como `image-gallery`, com `coverImageUrl` igual a primeira imagem e `imageUrls` contendo todas as paginas.
+9. So considerar a publicacao falha se nao houver PDF nem imagens de paginas extraiveis.
+
+O scraper precisa clicar em cada card para expor o player e o `data.json` assinado, mas nao deve clicar pagina por pagina para baixar imagens. Depois que as URLs assinadas forem conhecidas, o download deve ser direto pelo storage.
+
+Esse fallback continua pertencendo ao fluxo Playwright, porque ele depende do estado visual do player e da requisicao assinada criada pela sessao do browser.
+
 ### Fluxo Playwright Desde O Institucional
 
 1. Abrir `https://institucional.tauste.com.br/`.

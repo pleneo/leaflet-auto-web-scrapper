@@ -10,11 +10,11 @@ export class FetchLeafletImageHttpClient implements LeafletImageHttpClient {
 
     if (!response.ok) {
       throw new Error(
-        `Failed to download leaflet image: ${String(response.status)} ${response.statusText}`,
+        `Failed to download leaflet image from ${url}: ${String(response.status)} ${response.statusText}`,
       );
     }
 
-    const contentType = parseImageContentType(response.headers.get('content-type'), url);
+    const contentType = parseLeafletImageContentType(response.headers.get('content-type'), url);
     const body = new Uint8Array(await response.arrayBuffer());
 
     if (body.byteLength === 0) {
@@ -28,10 +28,15 @@ export class FetchLeafletImageHttpClient implements LeafletImageHttpClient {
   }
 }
 
-function parseImageContentType(value: string | null, url: string): LeafletImageContentType {
+export function parseLeafletImageContentType(
+  value: string | null,
+  url: string,
+): LeafletImageContentType {
   const contentType = value?.split(';')[0]?.trim().toLowerCase();
 
   switch (contentType) {
+    case 'image/jpg':
+      return 'image/jpeg';
     case 'image/jpeg':
     case 'image/png':
     case 'image/webp':
