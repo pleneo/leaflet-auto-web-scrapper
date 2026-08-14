@@ -158,6 +158,39 @@ describe('BistekLeafletExtractor', () => {
     expect(logger.warn).toHaveBeenCalled();
   });
 
+  it('filters stores by cityId when cityIds is non-empty', async () => {
+    const storeInCity4348: BistekMonitoredStore = { ...createStore(), cityId: '4348' };
+    const storeInCity9999: BistekMonitoredStore = {
+      ...createStore(),
+      storeId: '99',
+      cityId: '9999',
+      storeSlug: 'sc-blumenau-loja-no-99-99',
+    };
+    const discoveryPage = new FakeBistekPage([storeInCity4348, storeInCity9999], []);
+    const extractionPage = new FakeBistekPage([storeInCity4348], [createCard()]);
+    const extractor = new BistekLeafletExtractor(
+      new FakeBistekPageFactory([discoveryPage, extractionPage]),
+      { nowIso: () => '2026-08-14T10:00:00.000Z' },
+      createLogger(),
+      new FakeCaptureService(),
+    );
+
+    const result = await extractor.extract({
+      offersUrl: 'https://institucional.bistek.com.br/ofertas',
+      viewport: { width: 1366, height: 768, deviceScaleFactor: 1 },
+      timeoutMs: 30_000,
+      storeTimeoutMs: 30_000,
+      maxStoreAttempts: 1,
+      settleDelayMs: 0,
+      storeIds: [],
+      cityIds: ['4348'],
+    });
+
+    expect(result.stores).toHaveLength(1);
+    expect(result.stores[0]?.store.cityId).toBe('4348');
+    expect(result.failedStores).toHaveLength(0);
+  });
+
   it('creates default input and validates invalid extraction inputs', async () => {
     const extractor = new BistekLeafletExtractor(
       new FakeBistekPageFactory([]),

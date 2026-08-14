@@ -143,6 +143,9 @@ export function parseBistekLeafletCards(
       continue;
     }
 
+    // After the links.length === 0 guard above, links[0] is always defined,
+    // so the ?? fallback is unreachable. Ignored for coverage.
+    /* v8 ignore next */
     const group = links[0]?.fancyboxGroup ?? `Oferta-${String(index + 1)}`;
     const imageUrls = links
       .filter((link) => link.fancyboxGroup === group)

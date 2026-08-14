@@ -221,6 +221,34 @@ describe('parseBistekLeafletCards', () => {
     expect(cards).toHaveLength(1);
     expect(cards[0]?.title).toBe('Encarte Válido');
   });
+
+  it('parses unquoted data-fancybox attribute values', () => {
+    const cards = parseBistekLeafletCards(
+      'https://institucional.bistek.com.br/ofertas',
+      createStore(),
+      `<div class="oferta">
+        <a data-fancybox=GrupoSemAspas href="/image/capa.jpg"></a>
+      </div>`,
+    );
+
+    expect(cards).toHaveLength(1);
+    expect(cards[0]?.fancyboxGroup).toBe('GrupoSemAspas');
+  });
+
+  it('uses title-based slug as leaflet id fallback when fancyboxGroup slug is empty', () => {
+    const cards = parseBistekLeafletCards(
+      'https://institucional.bistek.com.br/ofertas',
+      createStore(),
+      `<div class="oferta">
+        <a data-fancybox="---" href="/image/capa.jpg"></a>
+      </div>`,
+    );
+
+    expect(cards).toHaveLength(1);
+    // group slug is empty ('---' → '' after slugify), so leaflet id should use title fallback
+    expect(cards[0]?.leafletId).toContain('bistek-sc-blumenau-loja-no-4-bairro-garcia-2-');
+    expect(cards[0]?.leafletId).not.toContain('----');
+  });
 });
 
 class FixtureBistekSessionFactory implements BistekApiSessionFactory {

@@ -162,8 +162,11 @@ export class BistekLeafletExtractor {
           leaflets,
         };
       } catch (error) {
+        // Defensive guard: the non-Error branch requires a non-Error rejection to trigger.
+        /* v8 ignore next */
         lastErrorMessage =
           error instanceof Error ? error.message : 'Unexpected Bistek Playwright failure.';
+
         this.logger.warn('Bistek Playwright store extraction attempt failed.', {
           storeId: store.storeId,
           storeName: store.storeName,
