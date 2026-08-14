@@ -41,6 +41,13 @@ import { AtacadaoLeafletExtractor } from '../scrapers/atacadao/atacadao-leaflet-
 import { AtacadaoPlaywrightStrategyAdapter } from '../scrapers/atacadao/atacadao-playwright-strategy-adapter';
 import { listAtacadaoMonitoredStores } from '../scrapers/atacadao/atacadao-targets';
 import { PlaywrightAtacadaoLeafletPageFactory } from '../scrapers/atacadao/playwright-atacadao-leaflet-page.factory';
+import { BistekApiClient } from '../scrapers/bistek/bistek-api-client';
+import { BistekApiExtractionService } from '../scrapers/bistek/bistek-api-extraction';
+import { BistekApiStrategyAdapter } from '../scrapers/bistek/bistek-api-strategy-adapter';
+import { BistekHybridStrategy } from '../scrapers/bistek/bistek-hybrid-strategy';
+import { BistekLeafletExtractor } from '../scrapers/bistek/bistek-leaflet-extractor';
+import { BistekPlaywrightStrategyAdapter } from '../scrapers/bistek/bistek-playwright-strategy-adapter';
+import { PlaywrightBistekLeafletPageFactory } from '../scrapers/bistek/playwright-bistek-leaflet-page.factory';
 import { CarnaubaApiExtractionService } from '../scrapers/carnauba/carnauba-api-extraction';
 import { CarnaubaApiStrategyAdapter } from '../scrapers/carnauba/carnauba-api-strategy-adapter';
 import { CarnaubaLeafletExtractor } from '../scrapers/carnauba/carnauba-leaflet-extractor';
@@ -103,6 +110,7 @@ import {
   filterAssaiStores,
   parseAssaiPlaywrightCommandOptions,
 } from './assai-playwright-command-options';
+import { parseBistekCommandOptions } from './bistek-command-options';
 import { parseCarnaubaPlaywrightCommandOptions } from './carnauba-playwright-command-options';
 import { parseComboAtacadistaCommandOptions } from './combo-atacadista-command-options';
 import { parseCoopCommandOptions } from './coop-command-options';
@@ -136,6 +144,7 @@ async function run(): Promise<void> {
   const comboAtacadistaOptions = parseComboAtacadistaCommandOptions(scraperArgs, process.env);
   const coopOptions = parseCoopCommandOptions(scraperArgs, process.env);
   const tausteOptions = parseTausteCommandOptions(scraperArgs, process.env);
+  const bistekOptions = parseBistekCommandOptions(scraperArgs, process.env);
   const logger = createLogger(process.env);
   const clock = new SystemClock();
   const visualDatasetRootDirectory = resolve(
@@ -149,6 +158,10 @@ async function run(): Promise<void> {
   const tausteVisualDatasetRootDirectory = resolve(
     process.cwd(),
     tausteOptions.visualDatasetRootDirectory,
+  );
+  const bistekVisualDatasetRootDirectory = resolve(
+    process.cwd(),
+    bistekOptions.visualDatasetRootDirectory,
   );
   const carnaubaPlaywrightStrategy = createPlaywrightExtractionStrategy(
     createCarnaubaStrategy(carnaubaOptions, visualDatasetRootDirectory, clock, logger),
@@ -229,6 +242,14 @@ async function run(): Promise<void> {
       ),
     ),
   });
+  const bistekPlaywrightStrategy = createPlaywrightExtractionStrategy(
+    createBistekStrategy(bistekOptions, bistekVisualDatasetRootDirectory, clock, logger),
+  );
+  const bistekApiStrategy = createBistekApiStrategy(bistekOptions, clock, logger);
+  const bistekHybridStrategy = new BistekHybridStrategy({
+    apiStrategy: bistekApiStrategy,
+    playwrightStrategy: bistekPlaywrightStrategy,
+  });
   const extractionStrategies: ExtractionStrategy[] = [
     carnaubaPlaywrightStrategy,
     carnaubaApiStrategy,
@@ -272,6 +293,9 @@ async function run(): Promise<void> {
     taustePlaywrightStrategy,
     tausteApiStrategy,
     tausteHybridStrategy,
+    bistekPlaywrightStrategy,
+    bistekApiStrategy,
+    bistekHybridStrategy,
   ];
   const runner = new ScheduledExtractionRunner(
     {
@@ -359,6 +383,15 @@ async function run(): Promise<void> {
           supermarketId: 'tauste',
           supermarketName: 'Tauste Supermercados',
           mode: resolveWorkerTargetMode(workerOptions.extractionMode, 'tauste'),
+          enabled: true,
+          intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
+          maxAttempts: 1,
+        }),
+        createExtractionTarget({
+          targetId: 'bistek',
+          supermarketId: 'bistek',
+          supermarketName: 'Bistek Supermercados',
+          mode: resolveWorkerTargetMode(workerOptions.extractionMode, 'bistek'),
           enabled: true,
           intervalMinutes: Math.ceil(workerOptions.intervalMs / 60_000),
           maxAttempts: 1,
@@ -1043,6 +1076,78 @@ function createTausteApiStrategy(
   );
 }
 
+function createBistekStrategy(
+  options: ReturnType<typeof parseBistekCommandOptions>,
+  visualDatasetRootDirectory: string,
+  clock: SystemClock,
+  logger: Logger,
+): BistekPlaywrightStrategyAdapter {
+  const visualDatasetCaptureService =
+    options.visualDatasetEnabled && visualDatasetRootDirectory.trim().length > 0
+      ? new VisualDatasetCaptureService(
+          new FileSystemVisualDatasetSampleRepository({
+            rootDirectory: visualDatasetRootDirectory,
+          }),
+          clock,
+        )
+      : undefined;
+  const extractionService = new BistekLeafletExtractor(
+    new PlaywrightBistekLeafletPageFactory(),
+    clock,
+    logger,
+    visualDatasetCaptureService,
+  );
+
+  return new BistekPlaywrightStrategyAdapter(
+    {
+      extractionInput: {
+        offersUrl: options.offersUrl,
+        viewport: options.viewport,
+        timeoutMs: options.timeoutMs,
+        storeTimeoutMs: options.storeTimeoutMs,
+        maxStoreAttempts: options.maxStoreAttempts,
+        settleDelayMs: options.settleDelayMs,
+        storeIds: options.storeIds,
+        cityIds: options.cityIds,
+      },
+      outputRootDirectory: resolve(process.cwd(), options.outputRootDirectory),
+      visualDatasetRootDirectory,
+      visualDatasetSplit: options.visualDatasetSplit,
+    },
+    {
+      extractionService,
+      storage: new LocalSharedImageGalleryStorage(new FetchLeafletImageHttpClient()),
+      countVisualDatasetSamples,
+    },
+  );
+}
+
+function createBistekApiStrategy(
+  options: ReturnType<typeof parseBistekCommandOptions>,
+  clock: SystemClock,
+  logger: Logger,
+): BistekApiStrategyAdapter {
+  const apiClient = new BistekApiClient({
+    baseUrl: options.baseUrl,
+  });
+  const extractionService = new BistekApiExtractionService(apiClient, clock, logger);
+
+  return new BistekApiStrategyAdapter(
+    {
+      extractionInput: {
+        offersUrl: options.offersUrl,
+        storeIds: options.storeIds,
+        cityIds: options.cityIds,
+      },
+      outputRootDirectory: resolve(process.cwd(), options.outputRootDirectory),
+    },
+    {
+      extractionService,
+      storage: new LocalSharedImageGalleryStorage(new FetchLeafletImageHttpClient()),
+    },
+  );
+}
+
 async function runCycle(runner: ScheduledExtractionRunner, shutdown: ShutdownState): Promise<void> {
   shutdown.activeCycle = runner.runCycle().then(() => undefined);
   await shutdown.activeCycle.finally(() => {
@@ -1112,7 +1217,8 @@ function supportsApiExtraction(supermarketId: SupermarketId): boolean {
     supermarketId === 'angeloni' ||
     supermarketId === 'comboatacadista' ||
     supermarketId === 'coop' ||
-    supermarketId === 'tauste'
+    supermarketId === 'tauste' ||
+    supermarketId === 'bistek'
   );
 }
 
