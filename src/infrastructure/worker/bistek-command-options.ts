@@ -58,7 +58,7 @@ export function parseBistekCommandOptions(
       env,
       'bistek-store-timeout-ms',
       'BISTEK_STORE_TIMEOUT_MS',
-      60_000,
+      180_000,
     ),
     maxStoreAttempts: readPositiveInteger(
       values,

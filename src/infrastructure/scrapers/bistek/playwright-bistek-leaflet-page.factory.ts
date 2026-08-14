@@ -202,9 +202,14 @@ class PlaywrightBistekLeafletPage implements BistekLeafletPage {
 
   async closeLeafletModal(): Promise<void> {
     await this.ensureFancyboxToolbarVisible();
-    await this.closeButtonLocator().click({
-      timeout: this.timeoutMs,
-    });
+    await this.closeButtonLocator()
+      .click({
+        force: true,
+        timeout: 2_000,
+      })
+      .catch(async () => {
+        await this.page.keyboard.press('Escape');
+      });
     await this.fancyboxContainerLocator().waitFor({
       state: 'hidden',
       timeout: this.timeoutMs,
