@@ -8,5 +8,6 @@ export type SupermarketId =
   | 'comboatacadista'
   | 'coop'
   | 'tauste'
+  | 'bistek'
   | 'sao-luiz'
   | 'generic-supermarket';

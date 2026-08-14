@@ -53,9 +53,23 @@ export interface AtacadaoLeafletMetadata {
   readonly storeSlug: string;
 }
 
+export interface BistekLeafletMetadata {
+  readonly metadataKind: 'bistek';
+  readonly capturedAtIso: string;
+  readonly sourcePageUrl: string;
+  readonly validityStartDateIso: string | null;
+  readonly validityEndDateIso: string | null;
+  readonly city: string;
+  readonly stateCode: string;
+  readonly cityId: string;
+  readonly storeId: string;
+  readonly storeName: string;
+}
+
 export type LeafletMetadata =
   | BaseLeafletMetadata
   | CarnaubaLeafletMetadata
   | AssaiLeafletMetadata
   | MixMateusLeafletMetadata
-  | AtacadaoLeafletMetadata;
+  | AtacadaoLeafletMetadata
+  | BistekLeafletMetadata;

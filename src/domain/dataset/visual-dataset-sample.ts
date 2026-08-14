@@ -250,6 +250,57 @@ export interface TaustePdfDownloadVisualDatasetSubject {
   readonly pdfUrl: string | null;
 }
 
+export interface BistekCitySelectionVisualDatasetSubject {
+  readonly subjectKind: 'bistek-city-selection';
+  readonly stateCode: string;
+  readonly cityId: string;
+  readonly cityName: string;
+}
+
+export interface BistekStoreSelectionVisualDatasetSubject {
+  readonly subjectKind: 'bistek-store-selection';
+  readonly stateCode: string;
+  readonly cityId: string;
+  readonly cityName: string;
+  readonly storeId: string;
+  readonly storeName: string;
+}
+
+export interface BistekLeafletCardVisualDatasetSubject {
+  readonly subjectKind: 'bistek-leaflet-card';
+  readonly stateCode: string;
+  readonly cityId: string;
+  readonly cityName: string;
+  readonly storeId: string;
+  readonly storeName: string;
+  readonly cardIndex: number;
+  readonly leafletTitle: string;
+}
+
+export interface BistekImageDownloadVisualDatasetSubject {
+  readonly subjectKind: 'bistek-image-download';
+  readonly stateCode: string;
+  readonly cityId: string;
+  readonly cityName: string;
+  readonly storeId: string;
+  readonly storeName: string;
+  readonly cardIndex: number;
+  readonly imageIndex: number;
+  readonly leafletTitle: string;
+  readonly imageUrl: string;
+}
+
+export interface BistekModalCloseVisualDatasetSubject {
+  readonly subjectKind: 'bistek-modal-close';
+  readonly stateCode: string;
+  readonly cityId: string;
+  readonly cityName: string;
+  readonly storeId: string;
+  readonly storeName: string;
+  readonly cardIndex: number;
+  readonly leafletTitle: string;
+}
+
 export type VisualDatasetSubject =
   | CarnaubaHomeLeafletsLinkVisualDatasetSubject
   | CarnaubaLeafletCardVisualDatasetSubject
@@ -281,7 +332,12 @@ export type VisualDatasetSubject =
   | TausteHomeOffersLinkVisualDatasetSubject
   | TausteFooterOffersLinkVisualDatasetSubject
   | TaustePublicationCardVisualDatasetSubject
-  | TaustePdfDownloadVisualDatasetSubject;
+  | TaustePdfDownloadVisualDatasetSubject
+  | BistekCitySelectionVisualDatasetSubject
+  | BistekStoreSelectionVisualDatasetSubject
+  | BistekLeafletCardVisualDatasetSubject
+  | BistekImageDownloadVisualDatasetSubject
+  | BistekModalCloseVisualDatasetSubject;
 
 export interface VisualDatasetSample {
   readonly sampleId: string;
