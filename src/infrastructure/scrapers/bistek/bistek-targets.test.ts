@@ -4,6 +4,7 @@ import {
   parseBistekCitiesFromHtml,
   parseBistekStoresFromHtml,
   parseBistekTargetsFromHtml,
+  slugify,
 } from './bistek-targets';
 
 describe('Bistek targets parser', () => {
@@ -85,6 +86,14 @@ describe('Bistek targets parser', () => {
       'Bistek page did not expose cidades_list.',
     );
     expect(() => parseBistekTargetsFromHtml('')).toThrow('html cannot be blank.');
+  });
+});
+
+describe('slugify', () => {
+  it('returns bistek as fallback when input normalizes to an empty string', () => {
+    expect(slugify('---')).toBe('bistek');
+    expect(slugify('   ')).toBe('bistek');
+    expect(slugify('')).toBe('bistek');
   });
 });
 

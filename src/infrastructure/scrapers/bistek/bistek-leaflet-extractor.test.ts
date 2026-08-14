@@ -266,6 +266,42 @@ describe('BistekLeafletExtractor', () => {
       }),
     ).rejects.toThrow('settleDelayMs must be a non-negative integer.');
   });
+
+  it('logs a warn when the fancybox active image url differs from the parsed gallery', async () => {
+    const logger = createLogger();
+    const cardWithMismatch: BistekLeafletCard = {
+      ...createCard(),
+      imageUrls: ['https://institucional.bistek.com.br/image/capa.jpg'],
+    };
+    const extractionPage = new FakeBistekPageWithMismatchedDownload(
+      [createStore()],
+      [cardWithMismatch],
+    );
+    const extractor = new BistekLeafletExtractor(
+      new FakeBistekPageFactory([new FakeBistekPage([createStore()], []), extractionPage]),
+      { nowIso: () => '2026-08-14T10:00:00.000Z' },
+      logger,
+      new FakeCaptureService(),
+    );
+
+    await extractor.extract({
+      offersUrl: 'https://institucional.bistek.com.br/ofertas',
+      viewport: { width: 1366, height: 768, deviceScaleFactor: 1 },
+      timeoutMs: 30_000,
+      storeTimeoutMs: 30_000,
+      maxStoreAttempts: 1,
+      settleDelayMs: 0,
+      storeIds: ['2'],
+      cityIds: [],
+    });
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Bistek Fancybox active image differs from parsed gallery.',
+      expect.objectContaining({
+        activeImageUrl: 'https://institucional.bistek.com.br/image/other.jpg',
+      }),
+    );
+  });
 });
 
 class FakeBistekPageFactory implements BistekLeafletPageFactory {
@@ -381,6 +417,13 @@ class FakeBistekPage implements BistekLeafletPage {
   close(): Promise<void> {
     this.events.push('close');
     return Promise.resolve();
+  }
+}
+
+class FakeBistekPageWithMismatchedDownload extends FakeBistekPage {
+  override resolveActiveDownloadImageUrl(): Promise<string> {
+    this.events.push('resolve-download');
+    return Promise.resolve('https://institucional.bistek.com.br/image/other.jpg');
   }
 }
 

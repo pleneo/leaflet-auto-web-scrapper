@@ -203,6 +203,24 @@ describe('parseBistekLeafletCards', () => {
       parseBistekLeafletCards('https://institucional.bistek.com.br/ofertas', createStore(), ' '),
     ).toThrow('html cannot be blank.');
   });
+
+  it('skips oferta blocks that have no valid fancybox image links', () => {
+    const cards = parseBistekLeafletCards(
+      'https://institucional.bistek.com.br/ofertas',
+      createStore(),
+      `
+        <div class="oferta">
+          <a href="/image/no-fancybox.jpg">no data-fancybox attr</a>
+        </div>
+        <div class="oferta">
+          ${createOffersHtml('Encarte Válido').trim()}
+        </div>
+      `,
+    );
+
+    expect(cards).toHaveLength(1);
+    expect(cards[0]?.title).toBe('Encarte Válido');
+  });
 });
 
 class FixtureBistekSessionFactory implements BistekApiSessionFactory {

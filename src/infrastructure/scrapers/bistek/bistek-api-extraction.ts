@@ -150,6 +150,9 @@ export function parseBistekLeafletCards(
       .filter((href, hrefIndex, hrefs) => hrefs.indexOf(href) === hrefIndex);
     const coverImageUrl = imageUrls[0];
 
+    // Defensive guard: coverImageUrl is unreachable when links is non-empty because
+    // imageUrls always contains at least links[0].href (same fancyboxGroup). Ignored for coverage.
+    /* v8 ignore next 3 */
     if (coverImageUrl === undefined) {
       continue;
     }
