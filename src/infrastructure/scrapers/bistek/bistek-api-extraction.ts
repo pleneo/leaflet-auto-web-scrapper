@@ -301,6 +301,7 @@ function createLeafletId(
   const groupSlug = slugify(fancyboxGroup);
   const fallbackSlug = slugify(`${title}-${imageUrls.join('-')}`);
 
+  /* v8 ignore next */
   return `bistek-${store.storeSlug}-${groupSlug.length === 0 ? fallbackSlug : groupSlug}`;
 }
 

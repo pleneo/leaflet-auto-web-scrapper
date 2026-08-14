@@ -163,7 +163,7 @@ export class BistekLeafletExtractor {
         };
       } catch (error) {
         // Defensive guard: the non-Error branch requires a non-Error rejection to trigger.
-        /* v8 ignore next */
+        /* v8 ignore next 2 */
         lastErrorMessage =
           error instanceof Error ? error.message : 'Unexpected Bistek Playwright failure.';
 

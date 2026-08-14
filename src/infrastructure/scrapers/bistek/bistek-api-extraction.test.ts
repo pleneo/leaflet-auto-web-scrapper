@@ -228,6 +228,7 @@ describe('parseBistekLeafletCards', () => {
       createStore(),
       `<div class="oferta">
         <a data-fancybox=GrupoSemAspas href="/image/capa.jpg"></a>
+        <a data-fancybox=GrupoSemHref></a>
       </div>`,
     );
 
