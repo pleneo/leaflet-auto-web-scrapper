@@ -180,6 +180,10 @@ describe('LocalSharedImageGalleryStorage', () => {
   it('loads a valid persistent image index before downloading new images', async () => {
     await mkdir(join(rootDirectory, 'superdopovo/shared-images'), { recursive: true });
     await writeFile(
+      join(rootDirectory, 'superdopovo/shared-images/cached.jpg'),
+      Uint8Array.of(1, 2, 3),
+    );
+    await writeFile(
       join(rootDirectory, 'superdopovo/shared-images/index.json'),
       `${JSON.stringify({
         version: 1,
@@ -202,6 +206,103 @@ describe('LocalSharedImageGalleryStorage', () => {
     expect(stored.sharedImagesDownloaded).toBe(1);
     expect(stored.sharedImagesReused).toBe(3);
     expect(httpClient.downloadedUrls).toEqual(['https://cdn.example.com/2.jpeg?cache=abc']);
+  });
+
+  it('redownloads persistent image index entries when the cached file is missing', async () => {
+    await mkdir(join(rootDirectory, 'superdopovo/shared-images'), { recursive: true });
+    await writeFile(
+      join(rootDirectory, 'superdopovo/shared-images/index.json'),
+      `${JSON.stringify({
+        version: 1,
+        images: [
+          {
+            canonicalUrl: 'https://cdn.example.com/1.jpeg?generation=111',
+            filePath: join(rootDirectory, 'superdopovo/shared-images/missing.jpg'),
+            contentType: 'image/jpeg',
+            byteLength: 3,
+            contentHash: createContentHash(Uint8Array.of(1, 2, 3)),
+          },
+        ],
+      })}\n`,
+    );
+    const httpClient = new FakeImageHttpClient();
+    const storage = new LocalSharedImageGalleryStorage(httpClient);
+
+    const stored = await storage.store(createInput(rootDirectory));
+
+    expect(stored.sharedImagesDownloaded).toBe(2);
+    expect(stored.sharedImagesReused).toBe(2);
+    expect(httpClient.downloadedUrls).toEqual([
+      'https://cdn.example.com/1.jpeg?generation=111',
+      'https://cdn.example.com/2.jpeg?cache=abc',
+    ]);
+  });
+
+  it('redownloads persistent image index entries when the cached file content changed', async () => {
+    await mkdir(join(rootDirectory, 'superdopovo/shared-images'), { recursive: true });
+    await writeFile(
+      join(rootDirectory, 'superdopovo/shared-images/cached.jpg'),
+      Uint8Array.of(9, 9, 9),
+    );
+    await writeFile(
+      join(rootDirectory, 'superdopovo/shared-images/index.json'),
+      `${JSON.stringify({
+        version: 1,
+        images: [
+          {
+            canonicalUrl: 'https://cdn.example.com/1.jpeg?generation=111',
+            filePath: join(rootDirectory, 'superdopovo/shared-images/cached.jpg'),
+            contentType: 'image/jpeg',
+            byteLength: 3,
+            contentHash: createContentHash(Uint8Array.of(1, 2, 3)),
+          },
+        ],
+      })}\n`,
+    );
+    const httpClient = new FakeImageHttpClient();
+    const storage = new LocalSharedImageGalleryStorage(httpClient);
+
+    const stored = await storage.store(createInput(rootDirectory));
+
+    expect(stored.sharedImagesDownloaded).toBe(2);
+    expect(stored.sharedImagesReused).toBe(2);
+    expect(httpClient.downloadedUrls).toEqual([
+      'https://cdn.example.com/1.jpeg?generation=111',
+      'https://cdn.example.com/2.jpeg?cache=abc',
+    ]);
+  });
+
+  it('redownloads persistent image index entries when the cached file size changed', async () => {
+    await mkdir(join(rootDirectory, 'superdopovo/shared-images'), { recursive: true });
+    await writeFile(
+      join(rootDirectory, 'superdopovo/shared-images/cached.jpg'),
+      Uint8Array.of(1, 2, 3, 4),
+    );
+    await writeFile(
+      join(rootDirectory, 'superdopovo/shared-images/index.json'),
+      `${JSON.stringify({
+        version: 1,
+        images: [
+          {
+            canonicalUrl: 'https://cdn.example.com/1.jpeg?generation=111',
+            filePath: join(rootDirectory, 'superdopovo/shared-images/cached.jpg'),
+            contentType: 'image/jpeg',
+            byteLength: 3,
+            contentHash: createContentHash(Uint8Array.of(1, 2, 3)),
+          },
+        ],
+      })}\n`,
+    );
+    const httpClient = new FakeImageHttpClient();
+    const storage = new LocalSharedImageGalleryStorage(httpClient);
+
+    const stored = await storage.store(createInput(rootDirectory));
+
+    expect(stored.sharedImagesDownloaded).toBe(2);
+    expect(httpClient.downloadedUrls).toEqual([
+      'https://cdn.example.com/1.jpeg?generation=111',
+      'https://cdn.example.com/2.jpeg?cache=abc',
+    ]);
   });
 
   it('stores downloaded png and webp images with matching file extensions', async () => {
@@ -238,6 +339,45 @@ describe('LocalSharedImageGalleryStorage', () => {
         `superdopovo/shared-images/${createContentHash(Uint8Array.of(10, 11, 12))}.webp`,
       ),
     ]);
+  });
+
+  it('persists predownloaded images without fetching them again', async () => {
+    const httpClient = new FakeImageHttpClient();
+    const storage = new LocalSharedImageGalleryStorage(httpClient);
+
+    const stored = await storage.store({
+      rootDirectory,
+      supermarketId: 'tauste',
+      extractedAtIso: '2026-08-13T10:00:00.000Z',
+      units: [
+        {
+          unitId: 'tauste-supermercados',
+          unitName: 'Tauste Supermercados',
+          sourceUrl: 'https://www.flipsnack.com/taustesupermercado/',
+          leaflets: [
+            {
+              leafletId: 'tauste:ofertas-tauste-bauru',
+              title: 'Ofertas Tauste Bauru',
+              coverImageUrl: 'https://cdn.example.com/signed/page-1/original?Policy=short',
+              imageUrls: ['https://cdn.example.com/signed/page-1/original?Policy=short'],
+              downloadedImages: [
+                {
+                  sourceUrl: 'https://cdn.example.com/signed/page-1/original?Policy=short',
+                  body: Uint8Array.of(13, 14, 15),
+                  contentType: 'image/jpeg',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(httpClient.downloadedUrls).toEqual([]);
+    expect(stored.sharedImagesDownloaded).toBe(1);
+    await expect(readFile(stored.sharedLeaflets[0]?.images[0]?.filePath ?? '')).resolves.toEqual(
+      Buffer.from([13, 14, 15]),
+    );
   });
 
   it('uses a fallback directory slug when the unit name has no slug content', async () => {

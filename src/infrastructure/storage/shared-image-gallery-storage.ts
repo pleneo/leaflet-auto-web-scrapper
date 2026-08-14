@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SupermarketId } from '../../domain/supermarket/supermarket-id';
 import type { LeafletImageContentType, LeafletImageHttpClient } from './leaflet-image-storage';
@@ -23,6 +23,13 @@ export interface SharedImageGalleryLeafletInput {
   readonly title: string;
   readonly coverImageUrl: string;
   readonly imageUrls: readonly string[];
+  readonly downloadedImages?: readonly SharedImageGalleryDownloadedImageInput[];
+}
+
+export interface SharedImageGalleryDownloadedImageInput {
+  readonly sourceUrl: string;
+  readonly body: Uint8Array;
+  readonly contentType: LeafletImageContentType;
 }
 
 export interface StoredSharedImageGalleryExtraction {
@@ -175,7 +182,7 @@ export class LocalSharedImageGalleryStorage {
 
     await writeFile(
       stored.metadataPath,
-      `${JSON.stringify({ input, storage: stored }, null, 2)}\n`,
+      `${JSON.stringify({ input: sanitizeInput(input), storage: stored }, null, 2)}\n`,
     );
 
     return stored;
@@ -230,7 +237,7 @@ export class LocalSharedImageGalleryStorage {
 
     await writeFile(
       storedUnit.metadataPath,
-      `${JSON.stringify({ unit, storage: storedUnit }, null, 2)}\n`,
+      `${JSON.stringify({ unit: sanitizeUnitInput(unit), storage: storedUnit }, null, 2)}\n`,
     );
 
     return storedUnit;
@@ -249,6 +256,9 @@ export class LocalSharedImageGalleryStorage {
         await this.prepareImage(
           index + 1,
           imageUrl,
+          leaflet.downloadedImages?.find(
+            (image) => canonicalizeImageUrl(image.sourceUrl) === canonicalizeImageUrl(imageUrl),
+          ),
           sharedImagesDirectoryPath,
           imageCache,
           counters,
@@ -266,6 +276,7 @@ export class LocalSharedImageGalleryStorage {
   private async prepareImage(
     order: number,
     sourceUrl: string,
+    downloadedImage: SharedImageGalleryDownloadedImageInput | undefined,
     sharedImagesDirectoryPath: string,
     imageCache: Map<string, CachedSharedImage>,
     counters: SharedImageGalleryCounters,
@@ -273,7 +284,7 @@ export class LocalSharedImageGalleryStorage {
     const canonicalUrl = canonicalizeImageUrl(sourceUrl);
     const cachedImage = imageCache.get(canonicalUrl);
 
-    if (cachedImage !== undefined) {
+    if (cachedImage !== undefined && (await cachedImageExists(cachedImage))) {
       counters.sharedImagesReused += 1;
       return {
         order,
@@ -282,19 +293,23 @@ export class LocalSharedImageGalleryStorage {
       };
     }
 
-    const downloadedImage = await this.httpClient.downloadImage(sourceUrl);
-    const contentHash = createHash('sha256').update(downloadedImage.body).digest('hex');
+    if (cachedImage !== undefined) {
+      imageCache.delete(canonicalUrl);
+    }
+
+    const image = downloadedImage ?? (await this.httpClient.downloadImage(sourceUrl));
+    const contentHash = createHash('sha256').update(image.body).digest('hex');
     const filePath = join(
       sharedImagesDirectoryPath,
-      `${contentHash}.${getImageExtension(downloadedImage.contentType)}`,
+      `${contentHash}.${getImageExtension(image.contentType)}`,
     );
-    await writeFile(filePath, downloadedImage.body);
+    await writeFile(filePath, image.body);
 
     const cached: CachedSharedImage = {
       canonicalUrl,
       filePath,
-      contentType: downloadedImage.contentType,
-      byteLength: downloadedImage.body.byteLength,
+      contentType: image.contentType,
+      byteLength: image.body.byteLength,
       contentHash,
     };
     imageCache.set(canonicalUrl, cached);
@@ -305,6 +320,23 @@ export class LocalSharedImageGalleryStorage {
       sourceUrl,
       ...cached,
     };
+  }
+}
+
+async function cachedImageExists(image: CachedSharedImage): Promise<boolean> {
+  try {
+    const fileStats = await stat(image.filePath);
+
+    if (!fileStats.isFile() || fileStats.size !== image.byteLength) {
+      return false;
+    }
+
+    const body = await readFile(image.filePath);
+    const contentHash = createHash('sha256').update(body).digest('hex');
+
+    return contentHash === image.contentHash;
+  } catch {
+    return false;
   }
 }
 
@@ -364,10 +396,43 @@ async function storeLeafletReference(
 
   await writeFile(
     reference.referencePath,
-    `${JSON.stringify({ leaflet: preparedLeaflet.leaflet, reference }, null, 2)}\n`,
+    `${JSON.stringify({ leaflet: sanitizeLeafletInput(preparedLeaflet.leaflet), reference }, null, 2)}\n`,
   );
 
   return reference;
+}
+
+function sanitizeInput(
+  input: StoreSharedImageGalleryExtractionInput,
+): StoreSharedImageGalleryExtractionInput {
+  return {
+    ...input,
+    units: input.units.map(sanitizeUnitInput),
+  };
+}
+
+function sanitizeUnitInput(unit: SharedImageGalleryUnitInput): SharedImageGalleryUnitInput {
+  return {
+    ...unit,
+    leaflets: unit.leaflets.map(sanitizeLeafletInput),
+  };
+}
+
+function sanitizeLeafletInput(
+  leaflet: SharedImageGalleryLeafletInput,
+): SharedImageGalleryLeafletInput {
+  if (leaflet.downloadedImages === undefined) {
+    return leaflet;
+  }
+
+  return {
+    ...leaflet,
+    downloadedImages: leaflet.downloadedImages.map((image) => ({
+      sourceUrl: image.sourceUrl,
+      body: new Uint8Array(),
+      contentType: image.contentType,
+    })),
+  };
 }
 
 function validateInput(input: StoreSharedImageGalleryExtractionInput): void {
