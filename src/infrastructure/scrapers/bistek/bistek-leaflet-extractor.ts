@@ -171,6 +171,7 @@ export class BistekLeafletExtractor {
           storeId: store.storeId,
           storeName: store.storeName,
           attempt,
+          errorMessage: lastErrorMessage,
         });
       }
     }

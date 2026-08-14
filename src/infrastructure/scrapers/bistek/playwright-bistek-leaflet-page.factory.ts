@@ -126,7 +126,7 @@ class PlaywrightBistekLeafletPage implements BistekLeafletPage {
   async selectStore(store: BistekMonitoredStore): Promise<void> {
     await Promise.all([
       this.page
-        .waitForLoadState('domcontentloaded', { timeout: this.timeoutMs })
+        .waitForURL(/\/ofertas\/?$/i, { waitUntil: 'domcontentloaded', timeout: this.timeoutMs })
         .catch(() => undefined),
       this.storeSelectLocator().selectOption(store.storeId, {
         timeout: this.timeoutMs,
@@ -135,6 +135,10 @@ class PlaywrightBistekLeafletPage implements BistekLeafletPage {
   }
 
   async waitForStoreLeaflets(store: BistekMonitoredStore): Promise<void> {
+    await this.storeModalLocator().waitFor({
+      state: 'hidden',
+      timeout: this.timeoutMs,
+    });
     await this.page
       .getByText(new RegExp(`Confira as ofertas de\\s+${escapeRegExp(store.cityName)}`, 'i'))
       .waitFor({
@@ -184,7 +188,7 @@ class PlaywrightBistekLeafletPage implements BistekLeafletPage {
       timeout: this.timeoutMs,
     });
 
-    if (href === null || href.trim().length === 0) {
+    if (typeof href !== 'string' || href.trim().length === 0) {
       throw new Error('Bistek Fancybox download button did not expose an image URL.');
     }
 
