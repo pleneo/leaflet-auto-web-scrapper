@@ -25,6 +25,7 @@ import { AngeloniApiClient } from '../scrapers/angeloni/angeloni-api-client';
 import { AngeloniApiExtractionService } from '../scrapers/angeloni/angeloni-api-extraction';
 import { AngeloniApiStrategyAdapter } from '../scrapers/angeloni/angeloni-api-strategy-adapter';
 import { AngeloniLeafletExtractor } from '../scrapers/angeloni/angeloni-leaflet-extractor';
+import { AngeloniHybridStrategy } from '../scrapers/angeloni/angeloni-hybrid-strategy';
 import { AngeloniPlaywrightStrategyAdapter } from '../scrapers/angeloni/angeloni-playwright-strategy-adapter';
 import {
   ANGELONI_HOME_URL,
@@ -166,6 +167,11 @@ async function run(): Promise<void> {
     createAngeloniStrategy(visualDatasetRootDirectory, clock, logger),
   );
   const angeloniApiStrategy = createAngeloniApiStrategy(clock, logger);
+  const angeloniHybridStrategy = createAngeloniHybridStrategy(
+    visualDatasetRootDirectory,
+    clock,
+    logger,
+  );
   const comboAtacadistaPlaywrightStrategy = createPlaywrightExtractionStrategy(
     createComboAtacadistaStrategy(
       comboAtacadistaOptions,
@@ -256,10 +262,7 @@ async function run(): Promise<void> {
     ),
     angeloniPlaywrightStrategy,
     angeloniApiStrategy,
-    new HybridExtractionStrategy('angeloni', {
-      apiStrategy: angeloniApiStrategy,
-      playwrightStrategy: angeloniPlaywrightStrategy,
-    }),
+    angeloniHybridStrategy,
     comboAtacadistaPlaywrightStrategy,
     comboAtacadistaApiStrategy,
     new HybridExtractionStrategy('comboatacadista', {
@@ -824,6 +827,19 @@ function createAngeloniApiStrategy(clock: SystemClock, logger: Logger): Angeloni
       storage: new LocalSharedPdfLeafletStorage(new FetchLeafletPdfHttpClient()),
     },
   );
+}
+
+function createAngeloniHybridStrategy(
+  visualDatasetRootDirectory: string,
+  clock: SystemClock,
+  logger: Logger,
+): AngeloniHybridStrategy {
+  return new AngeloniHybridStrategy({
+    apiStrategy: createAngeloniApiStrategy(clock, logger),
+    playwrightStrategy: createPlaywrightExtractionStrategy(
+      createAngeloniStrategy(visualDatasetRootDirectory, clock, logger),
+    ),
+  });
 }
 
 function createComboAtacadistaStrategy(
