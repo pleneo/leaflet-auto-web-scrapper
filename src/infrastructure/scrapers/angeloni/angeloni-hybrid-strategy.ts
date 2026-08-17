@@ -1,3 +1,4 @@
+import { createExtractionTarget } from '../../../domain/extraction/extraction-target';
 import type {
   ExtractionStrategy,
   ExtractionStrategyInput,
@@ -5,35 +6,41 @@ import type {
 } from '../../../application/ports/extraction-strategy';
 import type { SupermarketId } from '../../../domain/supermarket/supermarket-id';
 
-export interface TausteHybridStrategyDependencies {
+export interface AngeloniHybridStrategyDependencies {
   readonly apiStrategy: ExtractionStrategy;
-  readonly directPlaywrightStrategy: ExtractionStrategy;
-  readonly institutionalPlaywrightStrategy: ExtractionStrategy;
+  readonly playwrightStrategy: ExtractionStrategy;
 }
 
-export class TausteHybridStrategy implements ExtractionStrategy {
-  readonly supermarketId: SupermarketId = 'tauste';
+export class InvalidAngeloniHybridStrategyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidAngeloniHybridStrategyError';
+  }
+}
+
+export class AngeloniHybridStrategy implements ExtractionStrategy {
+  readonly supermarketId: SupermarketId = 'angeloni';
 
   readonly mode = 'hybrid';
 
   private readonly apiStrategy: ExtractionStrategy;
 
-  private readonly directPlaywrightStrategy: ExtractionStrategy;
+  private readonly playwrightStrategy: ExtractionStrategy;
 
-  private readonly institutionalPlaywrightStrategy: ExtractionStrategy;
+  constructor(dependencies: AngeloniHybridStrategyDependencies) {
+    validateStrategy(dependencies.apiStrategy, 'api');
+    validateStrategy(dependencies.playwrightStrategy, 'playwright');
 
-  constructor(dependencies: TausteHybridStrategyDependencies) {
     this.apiStrategy = dependencies.apiStrategy;
-    this.directPlaywrightStrategy = dependencies.directPlaywrightStrategy;
-    this.institutionalPlaywrightStrategy = dependencies.institutionalPlaywrightStrategy;
+    this.playwrightStrategy = dependencies.playwrightStrategy;
   }
 
   async execute(input: ExtractionStrategyInput): Promise<ExtractionStrategyOutput> {
-    const apiOutput = await this.apiStrategy.execute(input);
+    const apiOutput = await this.apiStrategy.execute(createModeInput(input, 'api'));
 
     for (const unit of apiOutput.units) {
       if (unit.status === 'succeeded' || unit.status === 'empty') {
-        input.logger.info('Tauste store extracted successfully via API.', {
+        input.logger.info('Angeloni region extracted successfully via API.', {
           runId: input.runId,
           targetId: input.target.targetId,
           unitId: unit.unitId,
@@ -42,7 +49,7 @@ export class TausteHybridStrategy implements ExtractionStrategy {
         });
       } else {
         input.logger.warn(
-          'Tauste store API extraction failed; Playwright fallback may be required.',
+          'Angeloni region API extraction failed; Playwright fallback may be required.',
           {
             runId: input.runId,
             targetId: input.target.targetId,
@@ -61,35 +68,54 @@ export class TausteHybridStrategy implements ExtractionStrategy {
       return apiOutput;
     }
 
-    input.logger.warn('Tauste API extraction failed; falling back to direct Playwright.', {
-      runId: input.runId,
-      targetId: input.target.targetId,
-      failureCount: apiOutput.failures.length,
-      failedUnitCount: failedUnits.length,
-    });
-    const directOutput = await this.directPlaywrightStrategy.execute(input);
-
-    if (directOutput.status !== 'failed') {
-      return apiOutput.units.length > 0
-        ? mergeStrategyOutputs(apiOutput, directOutput)
-        : directOutput;
-    }
-
     input.logger.warn(
-      'Tauste direct Playwright extraction failed; falling back to institutional navigation.',
+      'Angeloni API extraction failed or had failing units; executing Playwright fallback.',
       {
         runId: input.runId,
         targetId: input.target.targetId,
-        failureCount: directOutput.failures.length,
+        status: apiOutput.status,
+        leafletsFound: apiOutput.leafletsFound,
+        failedUnitCount: failedUnits.length,
       },
     );
 
-    const institutionalOutput = await this.institutionalPlaywrightStrategy.execute(input);
+    const playwrightOutput = await this.playwrightStrategy.execute(
+      createModeInput(input, 'playwright'),
+    );
 
-    return apiOutput.units.length > 0
-      ? mergeStrategyOutputs(apiOutput, institutionalOutput)
-      : institutionalOutput;
+    if (apiOutput.units.length === 0) {
+      return playwrightOutput;
+    }
+
+    return mergeStrategyOutputs(apiOutput, playwrightOutput);
   }
+}
+
+function validateStrategy(strategy: ExtractionStrategy, expectedMode: 'api' | 'playwright'): void {
+  if (strategy.supermarketId !== 'angeloni') {
+    throw new InvalidAngeloniHybridStrategyError(
+      `Angeloni ${expectedMode} strategy must belong to supermarket angeloni.`,
+    );
+  }
+
+  if (strategy.mode !== expectedMode) {
+    throw new InvalidAngeloniHybridStrategyError(
+      `Angeloni ${expectedMode} strategy must use ${expectedMode} mode.`,
+    );
+  }
+}
+
+function createModeInput(
+  input: ExtractionStrategyInput,
+  mode: 'api' | 'playwright',
+): ExtractionStrategyInput {
+  return {
+    ...input,
+    target: createExtractionTarget({
+      ...input.target,
+      mode,
+    }),
+  };
 }
 
 function mergeStrategyOutputs(
