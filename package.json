@@ -32,7 +32,7 @@
     "worker:angeloni": "npm run worker -- --only angeloni",
     "worker:comboatacadista": "npm run worker -- --only comboatacadista",
     "worker:coop": "npm run worker -- --only coop",
-    "worker:tauste": "npm run worker -- --only tauste --extraction-mode hybrid",
+    "worker:tauste": "npm run worker -- --only tauste",
     "capture:smoke": "tsx src/infrastructure/worker/visual-capture-smoke-command.ts",
     "carnauba:leaflets:smoke": "tsx src/infrastructure/worker/carnauba-leaflets-smoke-command.ts",
     "carnauba:playwright": "tsx src/infrastructure/worker/carnauba-playwright-command.ts",

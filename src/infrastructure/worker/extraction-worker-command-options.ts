@@ -31,7 +31,7 @@ export function parseExtractionWorkerCommandOptions(
 
   return {
     extractionMode: parseExtractionMode(
-      readOption(values, env, 'extraction-mode', 'EXTRACTION_MODE', 'playwright'),
+      readOption(values, env, 'extraction-mode', 'EXTRACTION_MODE', 'hybrid'),
     ),
     intervalMs:
       readPositiveInteger(values, env, 'interval-minutes', 'WORKER_INTERVAL_MINUTES', 60) *

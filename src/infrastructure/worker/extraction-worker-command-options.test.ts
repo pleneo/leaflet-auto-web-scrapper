@@ -8,7 +8,7 @@ import {
 describe('parseExtractionWorkerCommandOptions', () => {
   it('returns worker defaults', () => {
     expect(parseExtractionWorkerCommandOptions([], {})).toEqual({
-      extractionMode: 'playwright',
+      extractionMode: 'hybrid',
       intervalMs: 3_600_000,
       runImmediately: true,
       runOnce: false,
